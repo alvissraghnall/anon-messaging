@@ -5,9 +5,10 @@
   "scripts": {
     "watch:tailwind": "postcss public/tailwind.css -o public/index.css -w",
     "build:tailwind": "cross-env NODE_ENV=production postcss public/tailwind.css -o public/index.css",
-    "build": "rollup -c",
+    "build": "npm run build:css && rollup -c",
     "dev": "concurrently \"rollup -c -w\" \"npm run watch:tailwind\"",
-    "start": "sirv public --no-clear -s"
+    "start": "sirv public --no-clear -s",
+    "build:css": "NODE_ENV=production tailwindcss -o src/tailwind.css -m"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^17.0.0",
