@@ -7,7 +7,11 @@ module.exports = {
   plugins: [
   ],
   content: [
-       "./src/App.svelte",
-       "./src/index.css"
+    "./src/App.svelte",
+    "./src/index.css",
+    { raw: `@tailwind base;
+  @tailwind components;
+  @tailwind utilities;
+`, extension: 'css' }
   ],
 };
