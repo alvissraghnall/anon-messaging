@@ -1,17 +1,7 @@
-const production = !process.env.ROLLUP_WATCH;
 module.exports = {
-  /*future: {
-    purgeLayersByDefault: true,
-    removeDeprecatedGapUtilities: true,
-  }, 
-  plugins: [
-  ], */
-  content: [
-    "./src/App.svelte",
-    "./src/index.css",
-    { raw: `@tailwind base;
-  @tailwind components;
-  @tailwind utilities;
-`, extension: 'css' }
-  ],
+  content: ['./src/**/*.{html,js,svelte,ts}'],
+  theme: {
+    extend: {}
+  },
+  plugins: []
 };
