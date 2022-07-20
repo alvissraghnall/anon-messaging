@@ -14,9 +14,9 @@
 <Footer />
 
 <style>
-  .wrap-body {
+  /* .wrap-body {
     background-image: linear-gradient( 135deg, #92FFC0 10%, #002661 100%);
-  }
+  } */
   
   .page-logo {
     display: block;
