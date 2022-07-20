@@ -7,6 +7,7 @@ module.exports = {
   plugins: [
   ],
   content: [
+    "./brr.css",
     "./src/App.svelte",
     "./src/index.css",
     { raw: `@tailwind base;

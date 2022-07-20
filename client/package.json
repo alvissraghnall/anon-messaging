@@ -8,7 +8,7 @@
     "build": "npm run build:css && rollup -c",
     "dev": "concurrently \"rollup -c -w\" \"npm run watch:tailwind\"",
     "start": "sirv public --no-clear -s",
-    "build:css": "NODE_ENV=production tailwindcss -o src/tailwind.css -m"
+    "build:css": "NODE_ENV=production tailwindcss -o public/build/tailwind.css -m"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^17.0.0",
