@@ -26,6 +26,7 @@
   "dependencies": {
     "sirv-cli": "^2.0.0",
     "socket.io-client": "4.5.1",
+    "svelte-forms-lib": "2.0.1",
     "svelte-router-spa": "^6.0.3",
     "yup": "0.32.11"
   }
