@@ -1,11 +1,9 @@
 <script>
+  import { Router } from 'svelte-router-spa';
+  import { routes } from './routes'
 </script>
 
-<main>
-  <div class="flex">
-    <div class="px-2 py-2 rounded-md font-semibold text-xl bg-green-600 text-gray-50">tailwind</div>
-  </div>
-</main>
+<Router {routes} />
 
 <style lang="postcss" global>
   @tailwind base;
