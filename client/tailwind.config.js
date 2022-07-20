@@ -1,13 +1,12 @@
 const production = !process.env.ROLLUP_WATCH;
 module.exports = {
-  future: {
+  /*future: {
     purgeLayersByDefault: true,
     removeDeprecatedGapUtilities: true,
-  },
+  }, 
   plugins: [
-  ],
+  ], */
   content: [
-    "./brr.css",
     "./src/App.svelte",
     "./src/index.css",
     { raw: `@tailwind base;
