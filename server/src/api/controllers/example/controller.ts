@@ -1,5 +1,5 @@
 import ExamplesService from "../../services/examples.service";
-import { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 
 export class Controller {
   async getAll(req: Request, res: Response, next: NextFunction) {

@@ -1,0 +1,17 @@
+{
+  "entryFile": "./fixtures/express/server.ts",
+  "noImplicitAdditionalProperties": "silently-remove-extras",
+  "spec": {
+    "outputDirectory": "./dist",
+    "basePath": "/api/v1",
+    
+    "yaml": true,
+    "specVersion": 3
+  },
+  "routes": {
+    "basePath": "/api/v1",
+    "routesDir": "./src/api/controllers",
+    "middleware": "express"
+  },
+  "ignore": ["**/node_modules/**"]
+}

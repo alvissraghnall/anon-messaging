@@ -4,6 +4,10 @@ import resolve from '@rollup/plugin-node-resolve';
 import livereload from 'rollup-plugin-livereload';
 import { terser } from 'rollup-plugin-terser';
 import css from 'rollup-plugin-css-only';
+import sveltePreprocess from 'svelte-preprocess';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
+import postcss from 'postcss';
 
 const production = !process.env.ROLLUP_WATCH;
 
@@ -41,7 +45,12 @@ export default {
 			compilerOptions: {
 				// enable run-time checks when not in production
 				dev: !production
-			}
+			},
+			preprocess: sveltePreprocess({
+			  postcss: postcss({
+			    plugins: [tailwindcss(), autoprefixer()],
+			  }),
+			}),
 		}),
 		// we'll extract any component CSS out into
 		// a separate file - better for performance
