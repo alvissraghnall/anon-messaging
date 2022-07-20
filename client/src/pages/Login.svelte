@@ -1,4 +1,4 @@
-<style>
+<script>
   import FormView from "../views/Form.view";
   import { Navigate } from "svelte-router-spa";
   import { createForm } from "svelte-forms-lib";
@@ -21,7 +21,7 @@
         alert(JSON.stringify(values));
       }
     });
-</style>
+</script>
 
 <div id="login">
   <FormView>
