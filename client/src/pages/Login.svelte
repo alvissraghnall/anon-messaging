@@ -1,5 +1,5 @@
 <script>
-  import FormView from "../views/Form.view";
+  import FormView from "../views/Form.view.svelte";
   import { Navigate } from "svelte-router-spa";
   import { createForm } from "svelte-forms-lib";
     import * as yup from "yup";
