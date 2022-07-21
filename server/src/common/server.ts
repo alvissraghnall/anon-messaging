@@ -7,9 +7,11 @@ import cookieParser from "cookie-parser";
 import l from "./logger";
 import morgan from "morgan";
 import { IDatabase } from "./database";
+import SocketIO, { Server } from 'socket.io'
 
 import errorHandler from "../api/middlewares/error.handler";
 import * as OpenApiValidator from "express-openapi-validator";
+import { ChatEvent } from "./socket-constants";
 
 
 export default class ExpressServer {
@@ -17,6 +19,9 @@ export default class ExpressServer {
   private readonly root: string;
   private readonly apiSpec: string;
   private readonly validateResponses: boolean;
+  private io: SocketIO.Server;
+  private readonly PORT: number;
+  private server: any;
   
   constructor() {
     this.app = express();
@@ -47,6 +52,22 @@ export default class ExpressServer {
         ignorePaths: /.*\/spec(\/|$)/,
       })
     );
+    this.PORT = parseInt(process.env.PORT || "3000");
+    this.server = this.listen(this.PORT);
+
+    this.io = new Server(this.server);
+    this.socketInit();
+  }
+
+  socketInit () {
+    this.io.on(ChatEvent.CONNECT, (socket) => {
+      l.info(`Connected on port %s.`, this.PORT);
+      
+
+      socket.on(ChatEvent.DISCONNECT, () => {
+        l.info("Client disconnected");
+      })
+    })
   }
 
   router(routes: (app: Application) => void): ExpressServer {
@@ -68,8 +89,8 @@ export default class ExpressServer {
         } @: ${os.hostname()} on port: ${p}}`
       );
 
-    http.createServer(this.app).listen(port, welcome(port));
+    const server = http.createServer(this.app).listen(port, welcome(port));
 
-    return this.app;
+    return server;
   }
 }

@@ -1,20 +1,20 @@
 import userService from "../../services/user.service";
 import type { Request, Response, NextFunction } from "express";
 
-export default class UserController {
-  constructor(private req: Request, private res: Response, private next: NextFunction) {
+class UserController {
+  constructor() {
   }
   
-  async create() {
+  async create(req: Request, res: Response, next: NextFunction) {
     try {
-    const data = Pick<this.req.body, "username" | "email" | "password">;
+    const data = req.body;
     const user = await userService.create(data);
-    return this.res.status(201).location(`/api/v1/user/${doc.id}`).end();
+    return res.status(201).location(`/api/v1/user`).end();
     
     } catch (err) {
-      return this.next(err);
+      return next(err);
     }
   }
 }
 
-//export default new UserController();
+export default new UserController();
