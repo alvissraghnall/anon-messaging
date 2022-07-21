@@ -1,17 +1,18 @@
 <script>
   import Footer from "../components/Footer.svelte";
   import FormCard from "../components/FormCard.svelte";
+  import Main from "./Main.view.svelte";
 </script>
 
-<div class="wrap-body">
+<Main>
   <FormCard>
     <div class="page-logo mx-auto">
       <img src="assets/logo-icon.png" alt="Piree Logo">
     </div>
     <slot></slot>
   </FormCard>
-</div>
-<Footer />
+</Main>
+<!-- <Footer /> -->
 
 <style>
   /* .wrap-body {
