@@ -5,7 +5,7 @@
 
 <div class="wrap-body">
   <FormCard>
-    <div class="page-logo">
+    <div class="page-logo mx-auto">
       <img src="assets/logo-icon.png" alt="Piree Logo">
     </div>
     <slot></slot>

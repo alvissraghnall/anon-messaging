@@ -1,6 +1,13 @@
 import express from "express";
 import controller from "./controller";
-export default express
-  .Router()
-  .route("/user")
-  .post(controller.create)
+
+const router = express.Router();
+
+router
+  .route("/")
+  .post(controller.create);
+
+router
+  .post("/login", controller.login);
+
+export default router;

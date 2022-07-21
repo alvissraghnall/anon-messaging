@@ -11,8 +11,16 @@ class UserService {
   }
 
   async getById(id: number): Promise<IUserModel> {
-    l.info(`fetch example with id ${id}`);
+    l.info(`fetch user with id ${id}`);
     const user = (await User.findById(id).lean()) as IUserModel;
+    return user;
+  }
+
+  async getByEmail (email: string): Promise<IUserModel> {
+    l.info("fetch user by email, " + email);
+    const user = (await User.findOne({
+      email
+    }).lean()) as IUserModel;
     return user;
   }
 }

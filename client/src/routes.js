@@ -1,5 +1,6 @@
 import Home from "./pages/Home.svelte";
 import Login from "./pages/Login.svelte"
+import Register from "./pages/Register.svelte"
 
 export const routes = [
   {
@@ -9,5 +10,9 @@ export const routes = [
   {
     name: "login",
     component: Login
+  },
+  {
+    name: "register",
+    component: Register
   }
 ];
