@@ -25,6 +25,15 @@ class UserService {
     }).lean()) as IUserModel;
     return user;
   }
+
+  async getByUsername (username: string): Promise<IUserModel> {
+    l.info("fetch user by username: ", username);
+    let user = (await User.findOne({ username }).exec()) as IUserModel;
+    if (!user) {
+      user = await this.getByEmail(username);
+    }
+    return user;
+  }
 }
 
 export default new UserService();
