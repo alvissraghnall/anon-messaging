@@ -1,10 +1,12 @@
 import l from "../../common/logger";
+import { PasswordUtil } from "../lib/PasswordUtil";
 import User, { IUserModel } from "../models/user";
 
 class UserService {
   
   async create (data: IUserModel): Promise<IUserModel> {
     l.info(`create example with data ${data}`);
+    data.password = await PasswordUtil.hashPassword(data.password);
     const user = new User(data);
     const doc = (await user.save()) as IUserModel;
     return doc;
