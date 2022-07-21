@@ -22,6 +22,10 @@ jobs:
         image: mongo
         ports:
           - 27017:27017
+          
+    defaults:
+      run:
+        working-directory: ./server
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -31,7 +35,7 @@ jobs:
       - uses: actions/setup-node@v1
 
       - name: Create a .env file
-        run: mv .env.example .env
+        run: cp .env.example .env
 
       - name: Install dependencies
         run: yarn
