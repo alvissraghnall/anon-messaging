@@ -54,22 +54,10 @@ export default class ExpressServer {
       })
     );
     this.PORT = parseInt(process.env.PORT || "3000");
-    this.server = this.listen(this.PORT);
+    // this.server = this.listen(this.PORT);
 
-    this.io = new Server(this.server);
-    this.socketInit();
-  }
-
-  socketInit () {
-    this.io.on(ChatEvent.CONNECT, (socket) => {
-      l.info(`Connected on port %s.`, this.PORT);
-      
-      socket.on()
-
-      socket.on(ChatEvent.DISCONNECT, () => {
-        l.info("Client disconnected");
-      })
-    })
+    // this.io = new Server(this.server);
+    // this.socketInit();
   }
 
   router(routes: (app: Application) => void): ExpressServer {
