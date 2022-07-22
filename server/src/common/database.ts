@@ -21,8 +21,6 @@ export default class Database implements IDatabase {
         useUnifiedTopology: true,
         useCreateIndex: true,
         useFindAndModify: false,
-        user: process.env.DB_USER,
-        pass: process.env.DB_PASS,
       })
       .then(() => {
         l.info("Database connected.");

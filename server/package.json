@@ -6,10 +6,10 @@
   "scripts": {
     "start": "cross-env NODE_ENV=production node -r dotenv/config dist/index.js",
     "compile": "ts-node build.ts && tsc",
-    "dev": "nodemon -r dotenv/config src/index.ts | pino-pretty",
+    "dev": "npm run compile && npx nodemon -r dotenv/config src/index.ts | pino-pretty",
     "dev:debug": "nodemon --exec \"node -r ts-node/register --inspect-brk\" src/index.ts | pino-pretty",
-    "predev": "npm run swagger",
-    "prebuild": "npm run swagger",
+    "pre:dev": "npm run swagger",
+    "pre:build": "npm run swagger",
     "swagger": "tsoa spec",
     "test": "cross-env NODE_ENV=test mocha test/**/*.ts --exit",
     "test:debug": "cross-env NODE_ENV=test mocha --inspect-brk test/**/*.ts --exit",

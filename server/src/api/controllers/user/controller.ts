@@ -1,11 +1,13 @@
 import userService from "../../services/user.service";
 import type { Request, Response, NextFunction } from "express";
 import { PasswordUtil } from "../../lib/PasswordUtil";
+import { Route, Get, Post, Controller, SuccessResponse } from "tsoa";
 
-class UserController {
-  constructor() {
-  }
+@Route("user")
+class UserController extends Controller {
   
+  @SuccessResponse("201", "Created")
+  @Post()
   async create(req: Request, res: Response, next: NextFunction) {
     try {
       const data = req.body;

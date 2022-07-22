@@ -1,4 +1,4 @@
-import ExamplesService from "../../services/examples.service";
+import ExamplesService from "../../services/example.service";
 import type { Request, Response, NextFunction } from "express";
 
 export class Controller {
