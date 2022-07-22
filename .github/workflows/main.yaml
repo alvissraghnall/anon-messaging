@@ -22,6 +22,10 @@ jobs:
         image: mongo
         ports:
           - 27017:27017
+
+    strategy:
+      matrix:
+        node-version: [14.x, 15.x, 16.x]
           
     defaults:
       run:
@@ -38,16 +42,10 @@ jobs:
         run: cp .env.example .env
 
       - name: Install dependencies
-        run: yarn
+        run: npm i
 
       - name: Transpile source code
-        run: yarn compile
-
-      - name: Run tests
-        run: yarn test:junit
-
-      - name: Publish Unit Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v1.5
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          files: "test/**/test-results.xml"
+        run: npm run compile
+        
+      - name: Start Server
+        run: npm run dev

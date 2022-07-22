@@ -29,6 +29,7 @@
     "socket.io-client": "4.5.1",
     "svelte-forms-lib": "2.0.1",
     "svelte-router-spa": "^6.0.3",
-    "yup": "0.32.11"
+    "yup": "0.32.11",
+    "yup-password": "^0.2.2"
   }
 }
