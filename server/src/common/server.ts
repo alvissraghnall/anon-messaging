@@ -7,7 +7,7 @@ import cookieParser from "cookie-parser";
 import l from "./logger";
 import morgan from "morgan";
 import { IDatabase } from "./database";
-import SocketIO, { Server } from 'socket.io'
+import type { AddressInfo } from 'net'
 
 import errorHandler from "../api/middlewares/error.handler";
 import * as OpenApiValidator from "express-openapi-validator";
@@ -19,7 +19,6 @@ export default class ExpressServer {
   private readonly root: string;
   private readonly apiSpec: string;
   private readonly validateResponses: boolean;
-  private io: SocketIO.Server;
   private readonly PORT: number;
   private server: any;
   
@@ -53,11 +52,7 @@ export default class ExpressServer {
         ignorePaths: /.*\/spec(\/|$)/,
       })
     );
-    this.PORT = parseInt(process.env.PORT || "3000");
     // this.server = this.listen(this.PORT);
-
-    // this.io = new Server(this.server);
-    // this.socketInit();
   }
 
   router(routes: (app: Application) => void): ExpressServer {
@@ -76,10 +71,13 @@ export default class ExpressServer {
       l.info(
         `up and running in ${
           process.env.NODE_ENV || "development"
-        } @: ${os.hostname()} on port: ${p}}`
+        } @: ${os.hostname()} on port: ${p}}
+        `
       );
 
     const server = http.createServer(this.app).listen(port, welcome(port));
+
+    l.info(`URL:  http://${(server.address() as AddressInfo).address}:${(server.address() as AddressInfo).port}`)
 
     return server;
   }
