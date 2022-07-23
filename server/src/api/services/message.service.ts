@@ -1,21 +1,38 @@
-import { IMessageModel } from "../models/message";
+import l from "../../common/logger";
+import Message, { IMessageDocument } from "../models/message";
 import { Service } from "./service";
 
-export abstract class AbstractMessageService extends Service<IMessageModel> {}
+export abstract class AbstractMessageService extends Service<IMessageDocument> {}
 
 export class MessageService extends AbstractMessageService {
-    getById(id: number): Promise<IMessageModel> {
-        throw new Error("Method not implemented.");
+    async getById(id: number): Promise<IMessageDocument> {
+        l.info(`fetch Message with id ${id}`);
+        const message = (await Message.findById(id).lean()) as IMessageDocument;
+        return message;
     }
-    create(data: IMessageModel): Promise<IMessageModel> {
-        throw new Error("Method not implemented.");
+
+    async create(data: IMessageDocument): Promise<IMessageDocument> {
+        l.info(`create Message with data ${data}`);
+        const msg = new Message(data);
+        const savedMsg = (await msg.save()) as IMessageDocument;
+        return savedMsg;
     }
-    getAll(): Promise<IMessageModel[]> {
-        throw new Error("Method not implemented.");
+
+    async getAll(): Promise<IMessageDocument[]> {
+        l.info("fetch all messages");
+        const messages = (await Message.find(
+        null,
+        "-_id -__v"
+        ).lean()) as IMessageDocument[];
+        return messages;
     }
-    deleteById(id: number): Promise<void> {
-        throw new Error("Method not implemented.");
+
+    async deleteById(id: number): Promise<void> {
+        l.info(`delete Message with id ${id}`);
+        await Message.deleteById(id.toString());    
     }
 
     
 }
+
+export default new MessageService();

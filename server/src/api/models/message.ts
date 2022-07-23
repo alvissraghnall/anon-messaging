@@ -1,9 +1,13 @@
-import mongoose, { Schema, Document, ObjectId } from "mongoose";
+import mongoose, { Schema, Document, ObjectId, Model } from "mongoose";
 
-export interface IMessageModel extends Document {
+export interface IMessageDocument extends Document {
   data: string,
   sender: ObjectId,
   receiver: ObjectId
+}
+
+export interface IMessageModel extends Model<IMessageDocument> {
+  deleteById (id: string): void;
 }
 
 const messageSchema = new Schema({
@@ -19,9 +23,15 @@ const messageSchema = new Schema({
     ref: "User"
   },
 }, {
-  timestamps: true
+  timestamps: true,
 });
 
-const Message = mongoose.model<IMessageModel>("Model", messageSchema);
+messageSchema.statics.deleteById = function (_id) {
+  return this.deleteOne({
+    _id
+  });
+}
+
+const Message = mongoose.model<IMessageDocument, IMessageModel>("Model", messageSchema);
 
 export default Message;
