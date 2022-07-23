@@ -11,7 +11,7 @@ import type { AddressInfo } from 'net'
 
 import errorHandler from "../api/middlewares/error.handler";
 import * as OpenApiValidator from "express-openapi-validator";
-import { ChatEvent } from "./socket-constants";
+import { ChatEvent } from "../api/lib/socket-constants";
 
 
 export default class ExpressServer {

@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IUserModel extends Document {
   username: string,
@@ -6,7 +6,11 @@ export interface IUserModel extends Document {
   password: string
 }
 
-const userSchema = new Schema({
+export interface UserModel extends Model<IUserModel> {
+  deleteById(id: string): void;
+}
+
+const userSchema = new Schema<IUserModel, UserModel>({
   username: {
     type: String,
     unique: true,
@@ -28,6 +32,12 @@ const userSchema = new Schema({
   timestamps: true
 });
 
+userSchema.statics.deleteById = function (_id) {
+  return this.deleteOne({
+    _id
+  });
+}
 
-const User = mongoose.model<IUserModel>('User', userSchema);
+
+const User = mongoose.model<IUserModel, UserModel>('User', userSchema);
 export default User;

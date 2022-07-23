@@ -1,3 +1,7 @@
+<script>
+    export let advantages;
+</script>
+
 <section>
     <div class="woo">
         <h4>

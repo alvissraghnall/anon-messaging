@@ -2,7 +2,7 @@ import Database from "./common/database";
 import Server from "./common/server";
 import routes from "./routes";
 import io, { Server as SocketIOServer } from 'socket.io'
-import { ChatEvent } from "./common/socket-constants";
+import { ChatEvent } from "./api/lib/socket-constants";
 import l from "./common/logger";
 
 const port = parseInt(process.env.PORT || "3000");
@@ -16,9 +16,9 @@ const connectionString = process.env.MONGODB_URI;
   //     "mongodb://localhost:27017/anon-messaging";
 
 const db = new Database(connectionString);
-/*export default */const server = new Server().database(db).router(routes).listen(port);
+/*export default */const server = async () => (await new Server().database(db)).router(routes).listen(port);
 
-const sockio = new SocketIOServer(server);
+const sockio = new SocketIOServer(await server());
 sockio.on(ChatEvent.CONNECT, (socket) => {
   l.info(`Connected on port %s.`, port);
   
@@ -31,3 +31,5 @@ sockio.on(ChatEvent.CONNECT, (socket) => {
     l.info("Client disconnected");
   })
 })
+
+// server();
