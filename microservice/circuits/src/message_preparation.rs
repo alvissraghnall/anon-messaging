@@ -8,17 +8,30 @@ use std::ops::Mul;
 #[path = "message_preparation.test.rs"]
 mod tests;
 
-fn generate_ephemeral_keypair() -> (Fr, Ed25519) {
-    // Initialize random number generator
-    let mut rng = thread_rng();
+struct UserB {
+    esk: Fr,
+    epub: Ed25519,
+}
 
-    // Generate ephemeral secret key (esk)
-    let esk = Fr::rand(&mut rng);
+impl UserB {
+    fn generate_ephemeral_keypair() -> Self {
+        // Initialize random number generator
+        let mut rng = thread_rng();
 
-    // Compute ephemeral public key (epub)
-    // Get the generator point G and multiply by esk
-    let generator = Ed25519::generator();
-    let epub = generator.mul(esk);
+        // Generate ephemeral secret key (esk)
+        let esk = Fr::rand(&mut rng);
 
-    (esk, epub)
+        // Compute ephemeral public key (epub)
+        // Get the generator point G and multiply by esk
+        let generator = Ed25519::generator();
+        let epub = generator.mul(esk);
+
+        Self { esk, epub }
+    }
+
+    // Compute shared secret using User A's public key
+    fn compute_shared_secret(&self, pk_a: &Ed25519) -> Ed25519 {
+        // Multiply User A's public key by our ephemeral secret key
+        pk_a.mul(self.esk)
+    }
 }
