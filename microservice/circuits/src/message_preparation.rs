@@ -1,3 +1,7 @@
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
 use ark_ec::{CurveGroup, PrimeGroup};
 use ark_ed25519::{EdwardsProjective as Ed25519, Fr};
 use ark_ff::UniformRand;
@@ -19,6 +23,12 @@ struct UserB {
 struct DerivedKeys {
     randomness: [u8; 32], // r for commitment
     enc_key: [u8; 32],    // K for encryption
+}
+
+#[derive(Debug)]
+struct Ciphertext {
+    nonce: [u8; 12],    // 96-bit nonce for AES-GCM
+    encrypted: Vec<u8>, // Encrypted message with authentication tag
 }
 
 impl UserB {
@@ -76,5 +86,48 @@ impl UserB {
             randomness: r_bytes,
             enc_key: k_bytes,
         }
+    }
+
+    fn encrypt_message(
+        &self,
+        message: &[u8],
+        key: &[u8; 32],
+    ) -> Result<Ciphertext, Box<dyn std::error::Error>> {
+        // Create a new cipher instance
+        let cipher = Aes256Gcm::new(key.as_slice().into());
+
+        // Generate a random nonce
+        let mut rng = thread_rng();
+        let mut nonce = [0u8; 12];
+        for byte in &mut nonce {
+            *byte = UniformRand::rand(&mut rng);
+        }
+        let nonce = Nonce::from_slice(&nonce);
+
+        // Encrypt the message
+        let encrypted = cipher
+            .encrypt(nonce, message)
+            .map_err(|e| format!("Encryption failed: {}", e))?;
+
+        Ok(Ciphertext {
+            nonce: nonce.to_owned().into(),
+            encrypted,
+        })
+    }
+
+    // SHOULD NOT BE HERE!!!!!!!!
+    fn decrypt_message(
+        &self,
+        ciphertext: &Ciphertext,
+        key: &[u8; 32],
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let cipher = Aes256Gcm::new(key.as_slice().into());
+        let nonce = Nonce::from_slice(&ciphertext.nonce);
+
+        let decrypted = cipher
+            .decrypt(nonce, ciphertext.encrypted.as_ref())
+            .map_err(|e| format!("Decryption failed: {}", e))?;
+
+        Ok(decrypted)
     }
 }

@@ -268,3 +268,123 @@ fn test_domain_separation() {
         "Different domain separation tags should produce different outputs"
     );
 }
+
+#[test]
+fn test_encrypt_decrypt_roundtrip() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let sk_a = Fr::rand(&mut thread_rng());
+    let pk_a = Ed25519::generator().mul(sk_a);
+    let shared_secret = user_b.compute_shared_secret(&pk_a);
+    let derived_keys = user_b.derive_keys(&shared_secret);
+    
+    let message = b"Hello, World!";
+    
+    // Encrypt
+    let ciphertext = user_b.encrypt_message(message, &derived_keys.enc_key)
+        .expect("Encryption should succeed");
+        
+    // Decrypt
+    let decrypted = user_b.decrypt_message(&ciphertext, &derived_keys.enc_key)
+        .expect("Decryption should succeed");
+        
+    assert_eq!(message, decrypted.as_slice());
+}
+
+#[test]
+fn test_different_messages_produce_different_ciphertexts() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let derived_keys = DerivedKeys {
+        randomness: [0u8; 32],
+        enc_key: [1u8; 32],
+    };
+    
+    let message1 = b"Hello";
+    let message2 = b"World";
+    
+    let ciphertext1 = user_b.encrypt_message(message1, &derived_keys.enc_key)
+        .expect("Encryption should succeed");
+    let ciphertext2 = user_b.encrypt_message(message2, &derived_keys.enc_key)
+        .expect("Encryption should succeed");
+        
+    assert_ne!(ciphertext1.encrypted, ciphertext2.encrypted);
+}
+
+#[test]
+fn test_same_message_different_nonces() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let derived_keys = DerivedKeys {
+        randomness: [0u8; 32],
+        enc_key: [1u8; 32],
+    };
+    
+    let message = b"Same message";
+    
+    let ciphertext1 = user_b.encrypt_message(message, &derived_keys.enc_key)
+        .expect("Encryption should succeed");
+    let ciphertext2 = user_b.encrypt_message(message, &derived_keys.enc_key)
+        .expect("Encryption should succeed");
+        
+    assert_ne!(ciphertext1.encrypted, ciphertext2.encrypted);
+    assert_ne!(ciphertext1.nonce, ciphertext2.nonce);
+}
+
+#[test]
+fn test_wrong_key_fails_decryption() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let correct_key = [1u8; 32];
+    let wrong_key = [2u8; 32];
+    
+    let message = b"Secret message";
+    
+    let ciphertext = user_b.encrypt_message(message, &correct_key)
+        .expect("Encryption should succeed");
+        
+    let decryption_result = user_b.decrypt_message(&ciphertext, &wrong_key);
+    assert!(decryption_result.is_err());
+}
+
+#[test]
+fn test_modified_ciphertext_fails_decryption() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let key = [1u8; 32];
+    let message = b"Secret message";
+    
+    let mut ciphertext = user_b.encrypt_message(message, &key)
+        .expect("Encryption should succeed");
+        
+    // Modify the ciphertext
+    if let Some(byte) = ciphertext.encrypted.get_mut(0) {
+        *byte ^= 1;
+    }
+    
+    let decryption_result = user_b.decrypt_message(&ciphertext, &key);
+    assert!(decryption_result.is_err());
+}
+
+#[test]
+fn test_empty_message() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let key = [1u8; 32];
+    let message = b"";
+    
+    let ciphertext = user_b.encrypt_message(message, &key)
+        .expect("Encryption should succeed");
+    let decrypted = user_b.decrypt_message(&ciphertext, &key)
+        .expect("Decryption should succeed");
+        
+    assert_eq!(message, decrypted.as_slice());
+}
+
+#[test]
+fn test_large_message() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let key = [1u8; 32];
+    let message = vec![0u8; 1000000]; // 1MB of zeros
+    
+    let ciphertext = user_b.encrypt_message(&message, &key)
+        .expect("Encryption should succeed");
+    let decrypted = user_b.decrypt_message(&ciphertext, &key)
+        .expect("Decryption should succeed");
+        
+    assert_eq!(message, decrypted);
+}
