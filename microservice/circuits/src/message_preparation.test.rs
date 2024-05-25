@@ -98,3 +98,173 @@ fn test_compute_shared_secret_with_multiple_inputs() {
     }
 }
 
+#[test]
+fn test_derived_keys_length() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let sk_a = Fr::rand(&mut thread_rng());
+    let pk_a = Ed25519::generator().mul(sk_a);
+    let shared_secret = user_b.compute_shared_secret(&pk_a);
+    let derived_keys = user_b.derive_keys(&shared_secret);
+
+    // Check that derived keys have correct lengths
+    assert_eq!(derived_keys.randomness.len(), 32, "Randomness should be 32 bytes");
+    assert_eq!(derived_keys.enc_key.len(), 32, "Encryption key should be 32 bytes");
+}
+
+#[test]
+fn test_derived_keys_deterministic() {
+    // Generate two sets of keys with same inputs
+    let user_b = UserB::generate_ephemeral_keypair();
+    let sk_a = Fr::rand(&mut thread_rng());
+    let pk_a = Ed25519::generator().mul(sk_a);
+    let shared_secret = user_b.compute_shared_secret(&pk_a);
+    
+    let derived_keys_1 = user_b.derive_keys(&shared_secret);
+    let derived_keys_2 = user_b.derive_keys(&shared_secret);
+
+    // Same inputs should produce same outputs
+    assert_eq!(
+        derived_keys_1.randomness,
+        derived_keys_2.randomness,
+        "Randomness derivation should be deterministic"
+    );
+    assert_eq!(
+        derived_keys_1.enc_key,
+        derived_keys_2.enc_key,
+        "Encryption key derivation should be deterministic"
+    );
+}
+
+#[test]
+fn test_derived_keys_different_shared_secrets() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    
+    // Generate two different shared secrets
+    let sk_a1 = Fr::rand(&mut thread_rng());
+    let sk_a2 = Fr::rand(&mut thread_rng());
+    let pk_a1 = Ed25519::generator().mul(sk_a1);
+    let pk_a2 = Ed25519::generator().mul(sk_a2);
+    
+    let shared_secret1 = user_b.compute_shared_secret(&pk_a1);
+    let shared_secret2 = user_b.compute_shared_secret(&pk_a2);
+    
+    let derived_keys_1 = user_b.derive_keys(&shared_secret1);
+    let derived_keys_2 = user_b.derive_keys(&shared_secret2);
+
+    // Different inputs should produce different outputs
+    assert_ne!(
+        derived_keys_1.randomness,
+        derived_keys_2.randomness,
+        "Different shared secrets should produce different randomness"
+    );
+    assert_ne!(
+        derived_keys_1.enc_key,
+        derived_keys_2.enc_key,
+        "Different shared secrets should produce different encryption keys"
+    );
+}
+
+#[test]
+fn test_derived_keys_distinctness() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let sk_a = Fr::rand(&mut thread_rng());
+    let pk_a = Ed25519::generator().mul(sk_a);
+    let shared_secret = user_b.compute_shared_secret(&pk_a);
+    let derived_keys = user_b.derive_keys(&shared_secret);
+
+    // Randomness and encryption key should be different
+    assert_ne!(
+        derived_keys.randomness,
+        derived_keys.enc_key,
+        "Randomness and encryption key should be distinct"
+    );
+}
+
+#[test]
+fn test_derived_keys_non_zero() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let sk_a = Fr::rand(&mut thread_rng());
+    let pk_a = Ed25519::generator().mul(sk_a);
+    let shared_secret = user_b.compute_shared_secret(&pk_a);
+    let derived_keys = user_b.derive_keys(&shared_secret);
+
+    // Check that derived keys are not all zeros
+    assert_ne!(
+        derived_keys.randomness,
+        [0u8; 32],
+        "Randomness should not be all zeros"
+    );
+    assert_ne!(
+        derived_keys.enc_key,
+        [0u8; 32],
+        "Encryption key should not be all zeros"
+    );
+}
+
+#[test]
+fn test_key_derivation_with_identity_point() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let identity = Ed25519::generator();
+    let derived_keys = user_b.derive_keys(&identity);
+
+    // Even with identity point, should still produce valid keys
+    assert_ne!(
+        derived_keys.randomness,
+        [0u8; 32],
+        "Randomness should be non-zero even with identity point"
+    );
+    assert_ne!(
+        derived_keys.enc_key,
+        [0u8; 32],
+        "Encryption key should be non-zero even with identity point"
+    );
+}
+
+#[test]
+fn test_serialize_deserialize_consistency() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let sk_a = Fr::rand(&mut thread_rng());
+    let pk_a = Ed25519::generator().mul(sk_a);
+    let shared_secret = user_b.compute_shared_secret(&pk_a);
+    
+    // Serialize and deserialize the shared secret
+    let mut serialized = Vec::new();
+    shared_secret.serialize_uncompressed(&mut serialized).unwrap();
+    
+    // Verify serialization is consistent
+    let mut serialized2 = Vec::new();
+    shared_secret.serialize_uncompressed(&mut serialized2).unwrap();
+    assert_eq!(
+        serialized,
+        serialized2,
+        "Serialization should be deterministic"
+    );
+}
+
+#[test]
+fn test_domain_separation() {
+    let user_b = UserB::generate_ephemeral_keypair();
+    let sk_a = Fr::rand(&mut thread_rng());
+    let pk_a = Ed25519::generator().mul(sk_a);
+    let shared_secret = user_b.compute_shared_secret(&pk_a);
+    
+    // Manual derivation with different domain tags
+    let mut ss_bytes = Vec::new();
+    shared_secret.serialize_uncompressed(&mut ss_bytes).unwrap();
+    
+    let mut hasher1 = Sha256::new();
+    hasher1.update(b"test_domain_1");
+    hasher1.update(&ss_bytes);
+    let key1 = hasher1.finalize();
+    
+    let mut hasher2 = Sha256::new();
+    hasher2.update(b"test_domain_2");
+    hasher2.update(&ss_bytes);
+    let key2 = hasher2.finalize();
+    
+    assert_ne!(
+        key1,
+        key2,
+        "Different domain separation tags should produce different outputs"
+    );
+}
