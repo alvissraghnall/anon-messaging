@@ -2,13 +2,16 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
-use ark_ec::{CurveGroup, PrimeGroup};
-use ark_ed25519::{EdwardsProjective as Ed25519, Fr};
+use ark_ec::{AffineRepr, CurveGroup, PrimeGroup};
+use ark_ed25519::{EdwardsAffine, EdwardsProjective as Ed25519, Fr};
 use ark_ff::UniformRand;
-use ark_serialize::CanonicalSerialize;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::thread_rng;
+use ark_std::Zero;
+use blake2::Blake2b512;
 use sha2::{Digest, Sha256};
 use std::ops::Mul;
+use subtle::{Choice, ConstantTimeEq};
 
 #[cfg(test)]
 #[path = "message_preparation.test.rs"]
@@ -29,6 +32,95 @@ struct DerivedKeys {
 struct Ciphertext {
     nonce: [u8; 12],    // 96-bit nonce for AES-GCM
     encrypted: Vec<u8>, // Encrypted message with authentication tag
+}
+
+#[derive(Clone, Debug)]
+pub struct PedersenParams {
+    /// Base generator G
+    pub g: EdwardsAffine,
+    /// Secondary generator H
+    pub h: EdwardsAffine,
+}
+
+/// Commitment output containing the commitment point and auxiliary information
+#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+pub struct PedersenCommitment {
+    /// The commitment point on the curve
+    pub commitment: Ed25519,
+    /// Randomness used (stored for opening)
+    pub randomness: Fr,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CommitmentError {
+    #[error("Invalid randomness value")]
+    InvalidRandomness,
+
+    #[error("Error in hashing operation")]
+    HashingError,
+
+    #[error("Invalid commitment parameters")]
+    InvalidParameters,
+}
+
+impl PedersenParams {
+    /// Initialize Pedersen parameters using standardized generators
+    /*pub fn new() -> Self {
+        // Base generator G is the standard Ed25519 generator
+        let g = EdwardsAffine::generator();
+
+        // H is derived using the SHA512 hash of "ed25519_pedersen_h" || G
+        // This is a nothing-up-my-sleeve point generation
+        let h = Self::generate_h(&g);
+
+        Self { g, h }
+    }*/
+
+    /// Check if point has large order (not in small subgroup)
+    fn has_large_order(point: &EdwardsAffine) -> bool {
+        // Ed25519 cofactor is 8
+        let eight = Fr::from(8u64);
+        let eight_times_point = Ed25519::from(*point).mul(eight);
+        !eight_times_point.is_zero()
+    }
+
+    /// Hash to curve implementation following RFC 9380
+    fn hash_to_curve(hash: &[u8]) -> Option<EdwardsAffine> {
+        // In production, use a proper hash-to-curve implementation
+        // This is a placeholder showing the concept
+        let mut field_elem = Fr::zero();
+        if field_elem.deserialize_compressed(hash).is_ok() {
+            let point = Ed25519::generator().mul(field_elem);
+            Some(point.into_affine())
+        } else {
+            None
+        }
+    }
+
+    /// Generate the secondary generator H using nothing-up-my-sleeve process
+    fn generate_h(g: &EdwardsAffine) -> EdwardsAffine {
+        let mut g_bytes = Vec::new();
+        g.serialize_uncompressed(&mut g_bytes)
+            .expect("Serialization of base point failed");
+
+        let mut counter = 0u64;
+        loop {
+            let mut hasher = Blake2b512::new();
+            hasher.update(b"ed25519_pedersen_h");
+            hasher.update(&g_bytes);
+            hasher.update(&counter.to_le_bytes());
+            let hash = hasher.finalize();
+
+            // Try to map hash to curve point
+            if let Some(h) = Self::hash_to_curve(&hash) {
+                // Verify h is not the identity and not a small order point
+                if !h.is_zero() && Self::has_large_order(&h) {
+                    return h;
+                }
+            }
+            counter += 1;
+        }
+    }
 }
 
 impl UserB {

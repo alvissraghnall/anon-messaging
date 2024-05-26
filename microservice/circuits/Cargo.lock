@@ -479,8 +479,11 @@ dependencies = [
  "ark-snark",
  "ark-std 0.5.0",
  "arkworks-utils",
+ "blake2",
  "rand",
  "sha2",
+ "subtle",
+ "thiserror",
 ]
 
 [[package]]
