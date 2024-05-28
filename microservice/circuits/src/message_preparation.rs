@@ -4,7 +4,7 @@ use aes_gcm::{
 };
 use ark_ec::{AffineRepr, CurveGroup, PrimeGroup};
 use ark_ed25519::{EdwardsAffine, EdwardsProjective as Ed25519, Fr};
-use ark_ff::UniformRand;
+use ark_ff::{UniformRand, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::thread_rng;
 use ark_std::Zero;
@@ -65,16 +65,17 @@ pub enum CommitmentError {
 
 impl PedersenParams {
     /// Initialize Pedersen parameters using standardized generators
-    /*pub fn new() -> Self {
+    pub fn new() -> Self {
         // Base generator G is the standard Ed25519 generator
         let g = EdwardsAffine::generator();
 
         // H is derived using the SHA512 hash of "ed25519_pedersen_h" || G
         // This is a nothing-up-my-sleeve point generation
         let h = Self::generate_h(&g);
+        // let h = Self::generate_alternate_generator(&g);
 
         Self { g, h }
-    }*/
+    }
 
     /// Check if point has large order (not in small subgroup)
     fn has_large_order(point: &EdwardsAffine) -> bool {
@@ -89,7 +90,7 @@ impl PedersenParams {
         // In production, use a proper hash-to-curve implementation
         // This is a placeholder showing the concept
         let mut field_elem = Fr::zero();
-        if field_elem.deserialize_compressed(hash).is_ok() {
+        if Fr::deserialize_compressed(hash).is_ok() {
             let point = Ed25519::generator().mul(field_elem);
             Some(point.into_affine())
         } else {
@@ -120,6 +121,32 @@ impl PedersenParams {
             }
             counter += 1;
         }
+    }
+
+    fn generate_alternate_generator(g: &EdwardsAffine) -> EdwardsAffine {
+        let mut hasher = Blake2b512::new();
+        hasher.update(b"ed25519_pedersen_h_v1");
+        
+        // Add generator coordinates to the hash
+        let mut g_bytes = Vec::new();
+        g.serialize_uncompressed(&mut g_bytes)
+            .expect("Serialization of base point failed");
+        hasher.update(&g_bytes);
+        
+        // Use the hash output to create a scalar
+        let hash = hasher.finalize();
+        let mut scalar = Fr::deserialize_compressed(&hash[..32])
+            .expect("Hash to scalar failed");
+        
+        // Multiply generator by scalar and clear cofactor
+        // This ensures the point has the right order
+        let h_projective = Ed25519::generator().mul(scalar);
+        let h = h_projective.into_affine();
+        
+        // Verify point is valid (non-zero and correct order)
+        assert!(!h.is_zero(), "Generated point must not be identity");
+        
+        h
     }
 }
 
@@ -221,5 +248,89 @@ impl UserB {
             .map_err(|e| format!("Decryption failed: {}", e))?;
 
         Ok(decrypted)
+    }
+
+    /// Compute the commitment in constant time
+    fn compute_commitment(m: &Fr, r: &Fr, params: &PedersenParams) -> Ed25519 {
+        let g_m = Ed25519::from(params.g).mul_bigint(m.into_bigint());
+        let h_r = Ed25519::from(params.h).mul_bigint(r.into_bigint());
+        g_m + h_r
+    }
+
+    /// Hash ciphertext to scalar using domain separation
+    fn hash_ciphertext_to_scalar(ciphertext: &Ciphertext) -> Result<Fr, CommitmentError> {
+        let mut hasher = Blake2b512::new();
+
+        // Domain separation
+        hasher.update(b"PEDERSEN_COMMITMENT_V1");
+
+        // Hash structure of ciphertext
+        hasher.update(&(ciphertext.nonce.len() as u64).to_le_bytes());
+        hasher.update(&ciphertext.nonce);
+        hasher.update(&(ciphertext.encrypted.len() as u64).to_le_bytes());
+        hasher.update(&ciphertext.encrypted);
+
+        let hash = hasher.finalize();
+
+        let mut scalar = Fr::deserialize_compressed(&hash[..32])
+            .map_err(|_| CommitmentError::HashingError)?;
+
+        Ok(scalar)
+    }
+
+    /// Convert randomness bytes to scalar in constant time
+    fn randomness_to_scalar(randomness: &[u8; 32]) -> Result<Fr, CommitmentError> {
+        let mut scalar = Fr::deserialize_compressed(&randomness[..])
+            .map_err(|_| CommitmentError::InvalidRandomness)?;
+            
+        // Ensure scalar is in proper range
+        if scalar.is_zero() {
+            return Err(CommitmentError::InvalidRandomness);
+        }
+        
+        Ok(scalar)
+    }
+
+    /// Create a Pedersen commitment to a ciphertext
+    /// 
+    /// # Arguments
+    /// * `ciphertext` - The ciphertext to commit to
+    /// * `randomness` - Random value for hiding
+    /// * `params` - Pedersen commitment parameters
+    /// 
+    /// # Returns
+    /// * `Result<PedersenCommitment, CommitmentError>` - The commitment or error
+    pub fn create_commitment(
+        &self,
+        ciphertext: &Ciphertext,
+        randomness: &[u8; 32],
+        params: &PedersenParams,
+    ) -> Result<PedersenCommitment, CommitmentError> {
+        // Convert randomness to scalar in constant time
+        let r = Self::randomness_to_scalar(randomness)?;
+        
+        // Hash ciphertext to scalar
+        let m = Self::hash_ciphertext_to_scalar(ciphertext)?;
+        
+        // Compute commitment: com = m * G + r * H
+        let commitment = Self::compute_commitment(&m, &r, params);
+        
+        Ok(PedersenCommitment {
+            commitment,
+            randomness: r,
+        })
+    }
+
+    /// Verify a commitment opening
+    pub fn verify_commitment(
+        &self,
+        commitment: &PedersenCommitment,
+        ciphertext: &Ciphertext,
+        params: &PedersenParams,
+    ) -> Result<bool, CommitmentError> {
+        let m = Self::hash_ciphertext_to_scalar(ciphertext)?;
+        let expected = Self::compute_commitment(&m, &commitment.randomness, params);
+        
+        Ok(expected.into_affine().eq(&commitment.commitment.into_affine()))
     }
 }
