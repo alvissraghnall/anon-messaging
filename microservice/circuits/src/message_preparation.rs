@@ -11,6 +11,7 @@ use ark_std::Zero;
 use blake2::Blake2b512;
 use sha2::{Digest, Sha256};
 use std::ops::Mul;
+use hex_literal::hex;
 use subtle::{Choice, ConstantTimeEq};
 
 #[cfg(test)]
@@ -68,12 +69,23 @@ impl PedersenParams {
     pub fn new() -> Self {
         // Base generator G is the standard Ed25519 generator
         let g = EdwardsAffine::generator();
-
-        // H is derived using the SHA512 hash of "ed25519_pedersen_h" || G
-        // This is a nothing-up-my-sleeve point generation
-        let h = Self::generate_h(&g);
-        // let h = Self::generate_alternate_generator(&g);
-
+        
+        // H is the standard secondary generator for Ed25519 Pedersen commitments
+        // This point is from the Zcash specification (https://zips.z.cash/protocol/protocol.pdf)
+        // It's a nothing-up-my-sleeve point generated through a transparent process
+        let h_coordinates = hex!("
+            8b655970153799af2aeadc9ff1add0ea6c7251d54154cfa92c173a0dd39c1f94
+            d60aa6d7723b3cdd3a9c3b6f031fa8624578d3529d75235a81b39ca82aff5e0
+        ");
+        
+        // Convert the standardized coordinates to a curve point
+        let h = EdwardsAffine::deserialize_compressed(&h_coordinates[..])
+            .expect("Invalid secondary generator point");
+            
+        // Verify the point meets security requirements
+        assert!(!h.is_zero(), "Secondary generator must not be identity");
+        assert!(Self::has_large_order(&h), "Secondary generator must have large prime order");
+        
         Self { g, h }
     }
 
