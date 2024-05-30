@@ -4,7 +4,7 @@ use ark_relations::lc;
 //use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::Field;
 use ark_ff::PrimeField;
-use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError, Variable};
 use ark_std::{rand::Rng, UniformRand};
 use ark_ed25519::{EdwardsAffine, EdwardsConfig, EdwardsProjective as Ed25519, Fr, Fq};
 use ark_ec::PrimeGroup;
@@ -96,42 +96,80 @@ impl ConstraintSynthesizer<Fr> for MessageProtocolCircuit {
             Ok(Self::fq_to_fr(point.x))
         })?;
 
+		// Get generator point coordinates converted to Fr
+        let generator = Ed25519::generator().into_affine();
+        let generator_x_fr = Self::fq_to_fr(generator.x);
+
+		let one = Variable::One;
+
+		// Constraint: epub = G * esk
+        cs.enforce_constraint(
+            lc!() + esk_var,
+            lc!() + (generator_x_fr, one),
+            lc!() + epub_coords
+        )?;
+
+		// Constraint: shared_secret = pk_a * esk
+        cs.enforce_constraint(
+            lc!() + esk_var,
+            lc!() + pk_a_coords,
+            lc!() + shared_secret_coords
+        )?;
+
 		Ok(())
     }
 }
 
-// Test module
 #[cfg(test)]
 mod tests {
     use super::*;
     use ark_relations::r1cs::ConstraintSystem;
-    use ark_bls12_381::Fr as Bls12_381Fr;
     use ark_std::test_rng;
+	use ark_std::Zero;
 
     #[test]
     fn test_message_protocol_circuit() {
         let mut rng = test_rng();
         
-        // Generate User A's keys (in practice, these would be provided)
-        let pk_a = Bls12_381Fr::rand(&mut rng);
+        // Generate User A's key pair (in practice, pk_a would be provided)
+        let sk_a = Fr::rand(&mut rng);
+        let pk_a = Ed25519::generator().mul(sk_a).into();
         
         // Generate User B's ephemeral keys
-        let (esk, epub) = MessageProtocolCircuit::<Bls12_381Fr>::generate_ephemeral_keys(&mut rng);
+        let (esk, epub) = MessageProtocolCircuit::generate_ephemeral_keys(&mut rng);
         
         // Compute shared secret
-        let shared_secret = MessageProtocolCircuit::<Bls12_381Fr>::compute_shared_secret(&esk, &pk_a);
+        let shared_secret = MessageProtocolCircuit::compute_shared_secret(&esk, &pk_a);
         
         // Create circuit instance
-        let circuit = MessageProtocolCircuit {
-            pk_a: Some(pk_a),
-            esk: Some(esk),
-            epub: Some(epub),
-            shared_secret: Some(shared_secret),
-        };
+        let circuit = MessageProtocolCircuit::new(
+            Some(pk_a),
+            Some(esk),
+            Some(epub),
+            Some(shared_secret),
+        );
         
         // Test constraint satisfaction
         let cs = ConstraintSystem::new_ref();
         circuit.generate_constraints(cs.clone()).unwrap();
         assert!(cs.is_satisfied().unwrap());
+    }
+
+    #[test]
+    fn test_key_generation() {
+        let mut rng = test_rng();
+        let (esk, epub) = MessageProtocolCircuit::generate_ephemeral_keys(&mut rng);
+        
+        // Verify that epub = G * esk
+        let expected_epub: Ed25519 = Ed25519::generator().mul(esk).into();
+        assert_eq!(epub, expected_epub);
+    }
+
+    #[test]
+    fn test_field_conversion() {
+        let mut rng = test_rng();
+        let fq = Fq::rand(&mut rng);
+        let fr = MessageProtocolCircuit::fq_to_fr(fq);
+        assert!(!fr.is_zero(), "Conversion should not produce zero for random input");
     }
 }
