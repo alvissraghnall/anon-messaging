@@ -1,3 +1,4 @@
+use db::db::{create_db_pool, insert_user};
 use p256::ecdsa::{SigningKey, VerifyingKey};
 //use rand::rngs::OsRng;
 use rand_core::OsRng;
@@ -50,4 +51,26 @@ impl KeyPair {
          format!("{:x}", result)
      }
 
+}
+
+pub async fn generate_and_store_keys(user_id: &str) -> Result<KeyPair, String> {
+     let key_pair = KeyPair::generate();
+     let public_key_hash = key_pair.public_key_hash();
+
+     let pool = create_db_pool().await.map_err(|e| e.to_string())?;
+     insert_user(&pool, user_id, &public_key_hash)
+         .await
+         .map_err(|e| e.to_string())?;
+
+     Ok(key_pair)
+}
+
+pub fn validate_user_id(user_id: &str) -> Result<(), String> {
+      if user_id.len() > 20 {
+          return Err("user_id must be 20 characters or less".to_string());
+      }
+      if !user_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+          return Err("user_id can only contain alphanumeric characters and underscores".to_string());
+      }
+      Ok(())
 }
