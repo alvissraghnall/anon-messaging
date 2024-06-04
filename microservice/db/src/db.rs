@@ -69,7 +69,7 @@ pub async fn insert_user_with_retry(
         }
     }
 }
-
+/*
 pub async fn create_user(
     pool: &SqlitePool,
     custom_user_id: Option<String>,
@@ -92,3 +92,4 @@ pub async fn create_user(
     insert_user_with_retry(&pool, &user_id, &public_key_hash).await?;
     Ok(user_id)
 }
+*/
