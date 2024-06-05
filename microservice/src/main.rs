@@ -10,7 +10,10 @@ async fn main() -> std::io::Result<()> {
 	env::set_var("RUST_LOG", "debug");
     env_logger::init();
 
-	let pool = create_db_pool().await.map_err(|e| e.to_string());
+	let pool = create_db_pool().await.map_err(|e| std::io::Error::new(
+    	std::io::ErrorKind::Other,
+	    e.to_string()
+	))?;
 
 	HttpServer::new(move || {
         App::new()
