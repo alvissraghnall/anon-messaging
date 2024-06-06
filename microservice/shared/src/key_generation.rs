@@ -53,14 +53,7 @@ impl KeyPair {
 
 }
 
-pub async fn generate_and_store_keys(user_id: &str) -> Result<KeyPair, String> {
-     let key_pair = KeyPair::generate();
-     let public_key_hash = key_pair.public_key_hash();
 
-     let pool = create_db_pool().await.map_err(|e| e.to_string())?;
-     insert_user(&pool, user_id, &public_key_hash)
-         .await
-         .map_err(|e| e.to_string())?;
-
-     Ok(key_pair)
-}
+#[cfg(test)]
+#[path = "key_generation.test.rs"]
+mod tests;

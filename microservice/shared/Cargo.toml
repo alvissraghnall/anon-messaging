@@ -11,3 +11,6 @@ serde_json = "1.0.138"
 rand_core = "^0.6.0"
 sha2 = "0.10.8"
 db = { version = "0.1.0", path = "../db" }
+
+[dev-dependencies]
+generic-array = "0.14"

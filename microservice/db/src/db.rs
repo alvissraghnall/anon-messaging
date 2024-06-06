@@ -69,6 +69,7 @@ pub async fn insert_user_with_retry(
         }
     }
 }
+
 /*
 pub async fn create_user(
     pool: &SqlitePool,
@@ -93,3 +94,8 @@ pub async fn create_user(
     Ok(user_id)
 }
 */
+
+
+#[cfg(test)]
+#[path = "db.test.rs"]
+mod tests;
