@@ -135,3 +135,190 @@ fn test_json_roundtrip_preservation() {
     // Test that multiple serialization/deserialization cycles preserve the data
     assert_eq!(json1, json2);
 }
+
+const TEST_PASSPHRASE: &str = "test_passphrase_123";
+
+#[test]
+fn test_encrypt_decrypt_roundtrip() {
+	
+    let key_pair = KeyPair::generate();
+    let original_private_key = key_pair.private_key().to_vec();
+    
+	let (encrypted_key, nonce, salt) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+            .expect("Encryption should succeed");
+    
+    // Verify encryption produced different bytes
+    assert_ne!(encrypted_key, original_private_key);
+    assert!(!encrypted_key.is_empty());
+    assert!(!nonce.is_empty());
+    
+    // Test decryption
+    let decrypted_key = KeyPair::decrypt_private_key(
+        &encrypted_key,
+        &nonce,
+        TEST_PASSPHRASE,
+        &salt
+    ).expect("Decryption should succeed");
+    
+    // Verify decryption restored original key
+    assert_eq!(decrypted_key, original_private_key);
+}
+
+#[test]
+fn test_encryption_with_different_passphrases() {
+	let key_pair = KeyPair::generate();
+        
+    let (encrypted_key1, nonce1, salt1) = key_pair.encrypt_private_key("passphrase1")
+        .expect("First encryption should succeed");
+    let (encrypted_key2, nonce2, salt2) = key_pair.encrypt_private_key("passphrase2")
+        .expect("Second encryption should succeed");
+    
+    // Different passphrases should produce different encrypted results
+    assert_ne!(encrypted_key1, encrypted_key2);
+    assert_ne!(nonce1, nonce2);
+    assert_ne!(salt1, salt2);
+}
+
+#[test]
+fn test_decryption_with_wrong_passphrase() {
+    let key_pair = KeyPair::generate();
+    
+    let (encrypted_key, nonce, salt) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("Encryption should succeed");
+    
+    let result = KeyPair::decrypt_private_key(
+        &encrypted_key,
+        &nonce,
+        "wrong_passphrase",
+		&salt
+    );
+    
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_decryption_with_wrong_nonce() {
+	let key_pair = KeyPair::generate();
+        
+    let (encrypted_key, _, salt) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("Encryption should succeed");
+    
+    let wrong_nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    
+    let result = KeyPair::decrypt_private_key(
+        &encrypted_key,
+        &wrong_nonce,
+        TEST_PASSPHRASE,
+        &salt
+    );
+    
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_decryption_with_wrong_salt() {
+    let key_pair = KeyPair::generate();
+    
+    let (encrypted_key, nonce, _) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("Encryption should succeed");
+    
+    let wrong_salt = SaltString::generate(&mut OsRng);
+    
+    let result = KeyPair::decrypt_private_key(
+        &encrypted_key,
+        &nonce,
+        TEST_PASSPHRASE,
+        &wrong_salt.to_string()
+    );
+    
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_decryption_with_tampered_data() {
+    let key_pair = KeyPair::generate();
+    
+    let (mut encrypted_key, nonce, salt) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("Encryption should succeed");
+    
+    // Tamper with the encrypted data
+    if let Some(byte) = encrypted_key.get_mut(0) {
+        *byte ^= 0xFF;
+    }
+    
+    let result = KeyPair::decrypt_private_key(
+        &encrypted_key,
+        &nonce,
+        TEST_PASSPHRASE,
+		&salt,
+    );
+    
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_encryption_with_empty_passphrase() {
+    let key_pair = KeyPair::generate();
+    let result = key_pair.encrypt_private_key("");
+    
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_encryption_with_long_passphrase() {
+    let key_pair = KeyPair::generate();
+    let long_passphrase = "a".repeat(1000);
+    
+    let result = key_pair.encrypt_private_key(&long_passphrase);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_encrypted_data_format() {
+    let key_pair = KeyPair::generate();
+    let (encrypted_key, nonce, salt) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("Encryption should succeed");
+
+	println!("{salt}");
+    
+    // Check that encrypted data is longer than original due to authentication tag
+    assert!(encrypted_key.len() > key_pair.private_key().len());
+    
+    // Check nonce length
+    assert_eq!(nonce.len(), 12); // AES-GCM nonce is 12 bytes
+}
+
+#[test]
+fn test_multiple_encryptions_of_same_key() {
+    let key_pair = KeyPair::generate();
+    let original_private_key = key_pair.private_key().to_vec();
+    
+    // Encrypt multiple times
+    let (encrypted_key1, nonce1, salt1) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("First encryption should succeed");
+    let (encrypted_key2, nonce2, salt2) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("Second encryption should succeed");
+    
+    // Each encryption should be different due to random nonce and salt
+    assert_ne!(encrypted_key1, encrypted_key2);
+    assert_ne!(nonce1, nonce2);
+    assert_ne!(salt1, salt2);
+    
+    // But both should decrypt to the same original key
+    let decrypted1 = KeyPair::decrypt_private_key(
+        &encrypted_key1,
+        &nonce1,
+        TEST_PASSPHRASE,
+        &salt1
+    ).expect("First decryption should succeed");
+    
+    let decrypted2 = KeyPair::decrypt_private_key(
+        &encrypted_key2,
+        &nonce2,
+        TEST_PASSPHRASE,
+        &salt2
+    ).expect("Second decryption should succeed");
+    
+    assert_eq!(decrypted1, original_private_key);
+    assert_eq!(decrypted2, original_private_key);
+}
