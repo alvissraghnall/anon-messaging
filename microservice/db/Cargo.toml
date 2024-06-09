@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+base64 = "0.22.1"
 dotenv = "0.15.0"
 serde = "1.0.217"
 sqlx = { version = "0.8.3", features = ["sqlite", "runtime-tokio-native-tls"] }

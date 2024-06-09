@@ -3,18 +3,17 @@ use std::hash::Hash;
 use aes_gcm::{
     aead::{
         generic_array::{sequence::GenericSequence, GenericArray},
-        Aead, Nonce,
+        Aead,
     },
     AeadCore, Aes256Gcm, KeyInit,
 };
-use db::db::{create_db_pool, insert_user};
 use p256::ecdsa::{SigningKey, VerifyingKey};
 //use rand::rngs::OsRng;
 use pbkdf2::{
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    password_hash::{PasswordHasher, SaltString},
     Params, Pbkdf2,
 };
-use rand_core::{OsRng, RngCore};
+use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 

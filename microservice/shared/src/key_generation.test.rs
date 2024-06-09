@@ -241,7 +241,6 @@ fn test_decryption_with_tampered_data() {
     let (mut encrypted_key, nonce, salt) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
         .expect("Encryption should succeed");
     
-    // Tamper with the encrypted data
     if let Some(byte) = encrypted_key.get_mut(0) {
         *byte ^= 0xFF;
     }
@@ -279,7 +278,7 @@ fn test_encrypted_data_format() {
     let (encrypted_key, nonce, salt) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
         .expect("Encryption should succeed");
 
-	println!("{salt}");
+	dbg!("{salt}");
     
     // Check that encrypted data is longer than original due to authentication tag
     assert!(encrypted_key.len() > key_pair.private_key().len());
@@ -321,4 +320,39 @@ fn test_multiple_encryptions_of_same_key() {
     
     assert_eq!(decrypted1, original_private_key);
     assert_eq!(decrypted2, original_private_key);
+}
+
+#[test]
+fn test_salt_properties() {
+    let key_pair = KeyPair::generate();
+    let (_, _, salt) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("Encryption should succeed");
+    
+    // Convert salt string back to SaltString to verify format
+    let salt_obj = SaltString::from_b64(&salt)
+        .expect("Salt should be valid base64");
+    
+    // Standard salt should be 16 bytes = 22 base64 characters
+    assert_eq!(salt.len(), 22);
+    
+    // Test that salt is random
+    let (_, _, salt2) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("Second encryption should succeed");
+    assert_ne!(salt, salt2, "Salts should be random");
+}
+
+#[test]
+fn test_salt_parsing() {
+    let key_pair = KeyPair::generate();
+    let (encrypted_key, nonce, salt) = key_pair.encrypt_private_key(TEST_PASSPHRASE)
+        .expect("Encryption should succeed");
+    
+    // Test with invalid salt format
+    let result = KeyPair::decrypt_private_key(
+        &encrypted_key,
+        &nonce,
+        TEST_PASSPHRASE,
+        "invalid!!salt!!format"  // Invalid base64
+    );
+    assert!(result.is_err(), "Should fail with invalid salt format");
 }

@@ -194,6 +194,7 @@ dependencies = [
 name = "db"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "dotenv",
  "serde",
  "serde_json",
