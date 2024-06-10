@@ -13,6 +13,7 @@ sha2 = "0.10.8"
 db = { version = "0.1.0", path = "../db" }
 aes-gcm = "0.10.3"
 pbkdf2 = { version = "0.12.2", features = ["simple"] }
+base64 = "0.22.1"
 
 [dev-dependencies]
 generic-array = "0.14"

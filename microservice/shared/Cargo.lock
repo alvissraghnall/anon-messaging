@@ -1454,6 +1454,7 @@ name = "shared"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "base64",
  "db",
  "generic-array",
  "p256",

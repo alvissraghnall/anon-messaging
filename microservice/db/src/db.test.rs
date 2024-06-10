@@ -56,9 +56,9 @@ async fn test_insert_user() {
     let pool = setup_test_db().await;
     let user_id = "test_user";
     let public_key_hash = "test_hash";
-    let encrypted_private_key = b"encrypted_key";
+    let encrypted_private_key = "encrypted_key";
     let encryption_salt = "salt";
-    let encryption_nonce = b"nonce";
+    let encryption_nonce = "nonce";
 
     let result = insert_user(
         &pool,
@@ -75,9 +75,9 @@ async fn test_insert_user() {
     let user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(user.user_id, user_id);
     assert_eq!(user.public_key_hash, public_key_hash);
-    assert_eq!(user.encrypted_private_key, base64::encode(encrypted_private_key));
+    assert_eq!(user.encrypted_private_key, encrypted_private_key);
     assert_eq!(user.encryption_salt, encryption_salt);
-    assert_eq!(user.encryption_nonce, base64::encode(encryption_nonce));
+    assert_eq!(user.encryption_nonce, encryption_nonce);
 }
 
 #[tokio::test]
@@ -86,9 +86,9 @@ async fn test_get_user_by_id() {
     let pool = setup_test_db().await;
     let user_id = "test_user_get";
     let public_key_hash = "test_hash_get";
-    let encrypted_private_key = b"encrypted_key_get";
+    let encrypted_private_key = "encrypted_key_get";
     let encryption_salt = "salt_get";
-    let encryption_nonce = b"nonce_get";
+    let encryption_nonce = "nonce_get";
 
     // Insert a user first
     insert_user(
@@ -106,9 +106,9 @@ async fn test_get_user_by_id() {
     let user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(user.user_id, user_id);
     assert_eq!(user.public_key_hash, public_key_hash);
-    assert_eq!(user.encrypted_private_key, base64::encode(encrypted_private_key));
+    assert_eq!(user.encrypted_private_key, encrypted_private_key);
     assert_eq!(user.encryption_salt, encryption_salt);
-    assert_eq!(user.encryption_nonce, base64::encode(encryption_nonce));
+    assert_eq!(user.encryption_nonce, encryption_nonce);
 }
 
 #[tokio::test]
@@ -141,9 +141,9 @@ async fn test_insert_user_with_retry_success() {
     let pool = setup_test_db().await;
     let user_id = "test_user_retry";
     let public_key_hash = "test_hash_retry";
-    let encrypted_private_key = b"encrypted_key_retry";
+    let encrypted_private_key = "encrypted_key_retry";
     let encryption_salt = "salt_retry";
-    let encryption_nonce = b"nonce_retry";
+    let encryption_nonce = "nonce_retry";
 
     let result = insert_user_with_retry(
         &pool,
@@ -160,9 +160,9 @@ async fn test_insert_user_with_retry_success() {
     let user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(user.user_id, user_id);
     assert_eq!(user.public_key_hash, public_key_hash);
-    assert_eq!(user.encrypted_private_key, base64::encode(encrypted_private_key));
+    assert_eq!(user.encrypted_private_key, encrypted_private_key);
     assert_eq!(user.encryption_salt, encryption_salt);
-    assert_eq!(user.encryption_nonce, base64::encode(encryption_nonce));
+    assert_eq!(user.encryption_nonce, encryption_nonce);
 }
 
 #[tokio::test]
@@ -171,9 +171,9 @@ async fn test_insert_user_with_retry_duplicate() {
     let pool = setup_test_db().await;
     let user_id = "test_user_dup";
     let public_key_hash = "test_hash_dup";
-    let encrypted_private_key = b"encrypted_key_dup";
+    let encrypted_private_key = "encrypted_key_dup";
     let encryption_salt = "salt_dup";
-    let encryption_nonce = b"nonce_dup";
+    let encryption_nonce = "nonce_dup";
 
     // Insert first user
     insert_user(
@@ -192,9 +192,9 @@ async fn test_insert_user_with_retry_duplicate() {
         &pool,
         user_id,
         "different_hash",
-        b"different_key",
+        "different_key",
         "different_salt",
-        b"different_nonce",
+        "different_nonce",
     )
     .await;
     assert!(result.is_ok()); // Should succeed with a different user_id
@@ -211,9 +211,9 @@ async fn test_user_struct_serialization() {
         id: Some(1),
         user_id: "test_user".to_string(),
         public_key_hash: "test_hash".to_string(),
-        encrypted_private_key: base64::encode(b"encrypted_key"),
+        encrypted_private_key: "encrypted_key".to_string(),
         encryption_salt: "salt".to_string(),
-        encryption_nonce: base64::encode(b"nonce"),
+        encryption_nonce: "nonce".to_string(),
     };
 
     let serialized = serde_json::to_string(&user).unwrap();
@@ -238,9 +238,9 @@ async fn test_concurrent_user_insertion() {
         let handle = tokio::spawn(async move {
             let user_id = format!("concurrent_user_{}", i);
             let public_key_hash = format!("concurrent_hash_{}", i);
-            let encrypted_private_key = format!("concurrent_key_{}", i).into_bytes();
+            let encrypted_private_key = format!("concurrent_key_{}", i);
             let encryption_salt = format!("concurrent_salt_{}", i);
-            let encryption_nonce = format!("concurrent_nonce_{}", i).into_bytes();
+            let encryption_nonce = format!("concurrent_nonce_{}", i);
 
             insert_user_with_retry(
                 &pool,

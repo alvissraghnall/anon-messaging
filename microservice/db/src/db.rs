@@ -10,7 +10,7 @@ pub struct User {
     pub user_id: String,
     pub public_key_hash: String,
     pub encrypted_private_key: String,  // base64 encoded
-    pub encryption_salt: String,
+    pub encryption_salt: String,		// already a base64 string
     pub encryption_nonce: String,       // base64 encoded
 }
 
@@ -24,21 +24,19 @@ pub async fn insert_user(
     pool: &SqlitePool, 
     user_id: &str, 
     public_key_hash: &str,
-    encrypted_private_key: &[u8],
+    encrypted_private_key: &str,
     encryption_salt: &str,
-    encryption_nonce: &[u8]
+    encryption_nonce: &str
 ) -> Result<(), Error> {
-	let encoded_private_key = base64::encode(encrypted_private_key);
-	let encoded_nonce = base64::encode(encryption_nonce);
 
     sqlx::query!(
         "INSERT INTO users (user_id, public_key_hash, encrypted_private_key, encryption_salt, encryption_nonce) 
          VALUES ($1, $2, $3, $4, $5)",
         user_id,
         public_key_hash,
-		encoded_private_key,
+		encrypted_private_key,
         encryption_salt,
-        encoded_nonce
+        encryption_nonce
     )
     .execute(pool)
     .await?;
@@ -68,9 +66,9 @@ pub async fn insert_user_with_retry(
     pool: &SqlitePool,
     user_id: &str,
 	public_key_hash: &str,
-    encrypted_private_key: &[u8],
+    encrypted_private_key: &str,
     encryption_salt: &str,
-    encryption_nonce: &[u8]
+    encryption_nonce: &str
 ) -> Result<(), String> {
     let mut retries = 0;
     let mut final_user_id = user_id.to_string();
