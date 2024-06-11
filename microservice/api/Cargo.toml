@@ -11,3 +11,6 @@ serde = "1.0.217"
 serde_json = "1.0.138"
 shared = { version = "0.1.0", path = "../shared" }
 sqlx = "0.8.3"
+
+[dev-dependencies]
+actix-http = "3.9.0"

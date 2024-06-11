@@ -1,6 +1,7 @@
 use super::*;
 use serial_test::serial;
 use sqlx::migrate::MigrateDatabase;
+use sqlx::Row;
 use std::path::PathBuf;
 use std::env;
 use std::sync::Once;
@@ -187,21 +188,50 @@ async fn test_insert_user_with_retry_duplicate() {
     .await
     .unwrap();
 
-    // Try to insert duplicate
+    // Different values for second user
+    let different_hash = "different_hash";
+    let different_key = "different_key";
+    let different_salt = "different_salt";
+    let different_nonce = "different_nonce";
+
+    // Try to insert duplicate - should generate a new ID internally
     let result = insert_user_with_retry(
         &pool,
         user_id,
-        "different_hash",
-        "different_key",
-        "different_salt",
-        "different_nonce",
+        different_hash,
+        different_key,
+        different_salt,
+        different_nonce,
     )
     .await;
-    assert!(result.is_ok()); // Should succeed with a different user_id
-
-    // Verify both users exist with different IDs
+    assert!(result.is_ok());
+        
+    // Verify first user still exists with original data
     let first_user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(first_user.public_key_hash, public_key_hash);
+    
+    // Query all users with the given properties to find the newly created one
+    let query = "SELECT user_id FROM users WHERE public_key_hash = ?";
+    let rows = sqlx::query(query)
+        .bind(different_hash)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    
+    // Should be exactly one user with the new hash
+    assert_eq!(rows.len(), 1);
+    
+    // The new user_id should be different from the original
+    let new_user_id: String = rows[0].get(0);
+    assert_ne!(new_user_id, user_id);
+	println!("{} {}", new_user_id, user_id);
+    
+    // Verify the new user has all the correct data
+    let new_user = get_user_by_id(&pool, &new_user_id).await.unwrap();
+    assert_eq!(new_user.public_key_hash, different_hash);
+    assert_eq!(new_user.encrypted_private_key, different_key);
+    assert_eq!(new_user.encryption_salt, different_salt);
+    assert_eq!(new_user.encryption_nonce, different_nonce);
 }
 
 #[tokio::test]

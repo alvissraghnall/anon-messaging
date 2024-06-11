@@ -6,7 +6,7 @@ use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::{Deserialize, Serialize};
 use std::env;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct KeyGenerationRequest {
     pub custom_user_id: Option<String>,
     pub keyphrase: String, 
@@ -52,36 +52,47 @@ pub async fn generate_keys(
 
     // Encrypt the nonce and salt before storing them
     let server_key = env::var("SERVER_KEY").expect("SERVER_KEY must be set");
+	//dbg!("{}", &server_key);
+	//println!("{:?}", server_key.as_bytes());
+	//println!("{:?}", std::env::vars());
+
     let encrypted_nonce = encrypt_at_rest(&nonce, server_key.as_bytes());
 
-	let salt_bytes = base64::decode(salt).unwrap();
+	let salt_bytes = salt.as_bytes();
 	let encrypted_salt = encrypt_at_rest(&salt_bytes, server_key.as_bytes());
 
 	let encoded_salt = base64::encode(encrypted_salt);
 	let encoded_nonce = base64::encode(encrypted_nonce);
 	let encoded_private_key = base64::encode(encrypted_private_key);
 
-    // Store the user in the database
-    if let Err(e) = insert_user_with_retry(
-        &pool,
-        &user_id,
-        &public_key_hash,
-        &encoded_private_key,
-        &encoded_nonce,
-        &encoded_salt,
-    )
-    .await
-    {
-        return HttpResponse::InternalServerError().body(format!("Failed to insert user: {}", e));
-    }
-
-    // Return the response
-    HttpResponse::Ok().json(KeyGenerationResponse {
-        user_id,
-		encrypted_private_key: encoded_private_key,
-        encryption_nonce: encoded_nonce,
-        encryption_salt: encoded_salt,
+	// store user in database
+	insert_user_with_retry(
+	    &pool,
+	    &user_id,
+	    &public_key_hash,
+	    &encoded_private_key,
+	    &encoded_nonce,
+	    &encoded_salt,
+	)
+	.await
+	.map(|final_user_id| {
+	    // Handle the success case
+	    println!("User inserted successfully: {}", final_user_id);
+		HttpResponse::Ok().json(KeyGenerationResponse {
+	        user_id: final_user_id,
+	        encrypted_private_key: encoded_private_key,
+	        encryption_nonce: encoded_nonce,
+	        encryption_salt: encoded_salt,
+	    })
+	})
+	.map_err(|e| {
+	    eprintln!("Failed to insert user: {:?}", e);
+	    HttpResponse::InternalServerError().body(format!("Failed to insert user: {}", e))
+	})
+	.unwrap_or_else(|e| {
+        HttpResponse::InternalServerError().body(format!("Failed to insert user."))
     })
+
 }
 
 /// Validate a custom user_id

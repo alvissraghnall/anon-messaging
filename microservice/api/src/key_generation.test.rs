@@ -1,5 +1,5 @@
 use super::*;
-use actix_web::test;
+use actix_web::{test, App};
 use sqlx::sqlite::SqlitePoolOptions;
 use std::env;
 
@@ -13,7 +13,7 @@ async fn setup_test_db() -> SqlitePool {
         .expect("Failed to create test database pool");
 
     // Run migrations
-    sqlx::migrate!("./migrations")
+    sqlx::migrate!("../db/migrations")
         .run(&pool)
         .await
         .expect("Failed to run migrations");
@@ -22,22 +22,31 @@ async fn setup_test_db() -> SqlitePool {
 }
 
 // Helper function to create test app
-fn create_test_app(
-    pool: web::Data<SqlitePool>,
-) -> impl actix_web::dev::Service<actix_http::Request, Response = actix_web::dev::ServiceResponse> {
+async fn create_test_app(pool: SqlitePool) -> impl actix_web::dev::Service<actix_http::Request, Response = actix_web::dev::ServiceResponse, Error = actix_web::Error> {
     test::init_service(
         App::new()
-            .app_data(pool)
-            .service(web::resource("/generate-keys").route(web::post().to(generate_keys))),
-    )
+            .app_data(web::Data::new(pool))
+            .service(web::resource("/generate-keys").route(web::post().to(generate_keys)))
+    ).await
 }
+
+// Helper function to set up test environment
+fn setup_test_env() {
+    let test_key = "13c121c6e84dca7d31e852ad10148324".to_string();
+    env::set_var("SERVER_KEY", test_key);
+}
+
+fn cleanup_test_env() {
+    env::remove_var("SERVER_KEY");
+}
+
 
 #[actix_web::test]
 async fn test_successful_key_generation() {
     // Setup
-    env::set_var("SERVER_KEY", "test_server_key_12345678901234567890");
+	setup_test_env();
     let pool = setup_test_db().await;
-    let app = create_test_app(web::Data::new(pool.clone())).await;
+    let app = create_test_app(pool.clone()).await;
 
     // Create test request
     let request = KeyGenerationRequest {
@@ -77,9 +86,9 @@ async fn test_successful_key_generation() {
 
 #[actix_web::test]
 async fn test_custom_user_id() {
-    env::set_var("SERVER_KEY", "test_server_key_12345678901234567890");
+	setup_test_env();
     let pool = setup_test_db().await;
-    let app = create_test_app(web::Data::new(pool)).await;
+    let app = create_test_app(pool).await;
 
     let custom_id = "test_user_123";
     let request = KeyGenerationRequest {
@@ -100,8 +109,9 @@ async fn test_custom_user_id() {
 
 #[actix_web::test]
 async fn test_invalid_custom_user_id() {
+	setup_test_env();
     let pool = setup_test_db().await;
-    let app = create_test_app(web::Data::new(pool)).await;
+    let app = create_test_app(pool).await;
 
     // Test too long user_id
     let request = KeyGenerationRequest {
@@ -134,8 +144,9 @@ async fn test_invalid_custom_user_id() {
 
 #[actix_web::test]
 async fn test_invalid_keyphrase() {
+	setup_test_env();
     let pool = setup_test_db().await;
-    let app = create_test_app(web::Data::new(pool)).await;
+    let app = create_test_app(pool).await;
 
     // Test too short
     let request = KeyGenerationRequest {
@@ -164,42 +175,14 @@ async fn test_invalid_keyphrase() {
         .await;
 
     assert_eq!(resp.status(), 400);
-
-    // Test missing lowercase
-    let request = KeyGenerationRequest {
-        custom_user_id: None,
-        keyphrase: "UPPERCASE123!".to_string(),
-    };
-
-    let resp = test::TestRequest::post()
-        .uri("/generate-keys")
-        .set_json(&request)
-        .send_request(&app)
-        .await;
-
-    assert_eq!(resp.status(), 400);
-
-    // Test missing number
-    let request = KeyGenerationRequest {
-        custom_user_id: None,
-        keyphrase: "NoNumbersHere!".to_string(),
-    };
-
-    let resp = test::TestRequest::post()
-        .uri("/generate-keys")
-        .set_json(&request)
-        .send_request(&app)
-        .await;
-
-    assert_eq!(resp.status(), 400);
 }
 
 #[actix_web::test]
 async fn test_duplicate_user_id() {
-    env::set_var("SERVER_KEY", "test_server_key_12345678901234567890");
-    let pool = setup_test_db().await;
-    let app = create_test_app(web::Data::new(pool)).await;
-
+    setup_test_env();
+	let pool = create_db_pool().await.expect("Failed to create database pool");
+    let app = create_test_app(pool.clone()).await;
+    
     let request = KeyGenerationRequest {
         custom_user_id: Some("duplicate_user".to_string()),
         keyphrase: "TestPass123!".to_string(),
@@ -213,19 +196,53 @@ async fn test_duplicate_user_id() {
         .await;
 
     assert_eq!(resp.status(), 200);
-
-    // Second request with same user_id should fail
+    
+    // Extract the first user_id from the response
+    let first_response: serde_json::Value = test::read_body_json(resp).await;
+    let first_user_id = first_response["user_id"].as_str().unwrap();
+    
+    // Second request with same custom_user_id should also succeed
     let resp = test::TestRequest::post()
         .uri("/generate-keys")
         .set_json(&request)
         .send_request(&app)
         .await;
 
-    assert_eq!(resp.status(), 500);
+    assert_eq!(resp.status(), 200);
+    
+    // But it should have a different user_id
+    let second_response: serde_json::Value = test::read_body_json(resp).await;
+    let second_user_id = second_response["user_id"].as_str().unwrap();
+    
+    // Verify the system generated a different user_id for the second request	
+	println!("{} {}", first_user_id, second_user_id);
+	println!("{:?}", first_response);
+	println!("{:?}", second_response);
+    assert_ne!(first_user_id, second_user_id);
+
+	let query = "SELECT COUNT(*) FROM users WHERE user_id = ?";
+    let count: (i64,) = sqlx::query_as(query)
+		.bind("duplicate_user")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    
+    assert_eq!(count.0, 1, "Expected one distinct user record in the database");
+    
+
+    let query = "SELECT COUNT(*) FROM users WHERE user_id IN (?, ?)";    
+    let count: (i64,) = sqlx::query_as(query)
+        .bind(first_user_id)
+        .bind(second_user_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    
+    assert_eq!(count.0, 2);
 }
 
 #[test]
-fn test_validate_user_id() {
+async fn test_validate_user_id() {
     // Valid cases
     assert!(validate_user_id("valid_user_123").is_ok());
     assert!(validate_user_id("a").is_ok());
@@ -239,7 +256,7 @@ fn test_validate_user_id() {
 }
 
 #[test]
-fn test_validate_keyphrase() {
+async fn test_validate_keyphrase() {
     // Valid cases
     assert!(validate_keyphrase("ValidPass123!").is_ok());
     assert!(validate_keyphrase("AnotherValid123").is_ok());

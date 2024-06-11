@@ -69,13 +69,13 @@ pub async fn insert_user_with_retry(
     encrypted_private_key: &str,
     encryption_salt: &str,
     encryption_nonce: &str
-) -> Result<(), String> {
+) -> Result<String, String> {
     let mut retries = 0;
     let mut final_user_id = user_id.to_string();
 
     loop {
 	    match insert_user(pool, &final_user_id, public_key_hash, encrypted_private_key, encryption_salt, encryption_nonce).await {
-             Ok(_) => return Ok(()),
+             Ok(_) => return Ok(final_user_id),
              Err(Error::Database(err)) if err.is_unique_violation() => {
                   // If the user_id already exists, generate a new one
                   retries += 1;
@@ -87,6 +87,7 @@ pub async fn insert_user_with_retry(
              Err(e) => return Err(e.to_string()),
         }
     }
+	
 }
 
 /*
