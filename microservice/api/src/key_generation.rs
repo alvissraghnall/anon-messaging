@@ -2,6 +2,7 @@ use shared::data_encryption::encrypt_at_rest;
 use sqlx::{SqlitePool};
 use shared::key_generation::KeyPair;
 use db::db::{create_db_pool, insert_user_with_retry, generate_user_id, User};
+use serde_json::json;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -26,7 +27,7 @@ pub async fn generate_keys(
 ) -> impl Responder {
 	
 	if let Err(e) = validate_keyphrase(&request.keyphrase) {
-        return HttpResponse::BadRequest().body(e);
+        return HttpResponse::BadRequest().json(json!({ "message": e }));
     }
 
     // Generate a new key pair
@@ -37,7 +38,7 @@ pub async fn generate_keys(
     let user_id = match &request.custom_user_id {
         Some(id) => {
             if let Err(e) = validate_user_id(id) {
-                return HttpResponse::BadRequest().body(e);
+                return HttpResponse::BadRequest().json(json!({ "message": e }));
             }
             id.clone()
         }
@@ -47,7 +48,7 @@ pub async fn generate_keys(
     // Encrypt the private key using the keyphrase
     let (encrypted_private_key, nonce, salt) = match key_pair.encrypt_private_key(&request.keyphrase) {
         Ok(result) => result,
-        Err(e) => return HttpResponse::InternalServerError().body(format!("Failed to encrypt private key: {}", e)),
+        Err(e) => return HttpResponse::InternalServerError().json(json!({ "message": format!("Failed to encrypt private key: {}", e) } )),
     };
 
     // Encrypt the nonce and salt before storing them
@@ -87,10 +88,10 @@ pub async fn generate_keys(
 	})
 	.map_err(|e| {
 	    eprintln!("Failed to insert user: {:?}", e);
-	    HttpResponse::InternalServerError().body(format!("Failed to insert user: {}", e))
+	    HttpResponse::InternalServerError().json(json!({ "message": format!("Failed to insert user: {}", e) } ))
 	})
 	.unwrap_or_else(|e| {
-        HttpResponse::InternalServerError().body(format!("Failed to insert user."))
+        HttpResponse::InternalServerError().json(json!({ "message": "Failed to encrypt private key" } ))
     })
 
 }
@@ -111,14 +112,14 @@ fn validate_keyphrase(keyphrase: &str) -> Result<(), String> {
         return Err("Keyphrase must be at least 8 characters long".to_string());
     }
 
-    let has_uppercase = keyphrase.chars().any(|c| c.is_ascii_uppercase());
-    let has_lowercase = keyphrase.chars().any(|c| c.is_ascii_lowercase());
-    let has_digit = keyphrase.chars().any(|c| c.is_ascii_digit());
+    // let has_uppercase = keyphrase.chars().any(|c| c.is_ascii_uppercase());
+    // let has_lowercase = keyphrase.chars().any(|c| c.is_ascii_lowercase());
+    // let has_digit = keyphrase.chars().any(|c| c.is_ascii_digit());
     // let has_special = keyphrase.chars().any(|c| !c.is_ascii_alphanumeric());
 
-    if !(has_uppercase && has_lowercase && has_digit) {
-        return Err("Keyphrase must include uppercase, lowercase, digits, and special characters".to_string());
-    }
+    // if !(has_uppercase && has_lowercase && has_digit) {
+    //     return Err("Keyphrase must include uppercase, lowercase, digits.".to_string());
+    // }
 
     Ok(())
 }
