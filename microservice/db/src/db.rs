@@ -115,6 +115,48 @@ pub async fn create_user(
 }
 */
 
+async fn store_encrypted_message(
+    pool: &SqlitePool,
+    sender_id: &str,
+    recipient_id: &str,
+    encrypted_message: &str,
+) -> Result<(), String> {
+    sqlx::query!(
+        r#"
+        INSERT INTO encrypted_messages (sender_id, recipient_id, encrypted_message)
+        VALUES ($1, $2, $3)
+        "#,
+        sender_id,
+        recipient_id,
+        encrypted_message
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::Database(db_err) if db_err.is_foreign_key_violation() => {
+            format!("Sender or recipient does not exist")
+        }
+        _ => format!("Failed to store encrypted message: {}", e),
+    })?;
+
+    Ok(())
+}
+
+async fn fetch_public_key_hash(pool: &sqlx::SqlitePool, user_id: &str) -> Result<String, sqlx::Error> {
+    let public_key_hash = sqlx::query!(
+        r#"
+        SELECT public_key_hash
+        FROM users
+        WHERE user_id = $1
+        "#,
+        user_id
+    )
+    .fetch_one(pool)
+    .await?
+    .public_key_hash;
+
+    Ok(public_key_hash)
+}
 
 #[cfg(test)]
 #[path = "db.test.rs"]
