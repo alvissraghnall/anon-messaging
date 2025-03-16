@@ -1,0 +1,9 @@
+{
+    "tailwindCSS.experimental.configFile": "./src/app.css",
+    "files.associations": {
+        "*.css": "tailwindcss"
+    },
+    "tailwindCSS.includeLanguages": {
+        "svelte": "html"
+    }
+}
