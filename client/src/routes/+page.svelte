@@ -4,43 +4,37 @@
   import { flip } from "svelte/animate";
   import { fly, fade, slide,  } from 'svelte/transition';
   import { spring, } from 'svelte/motion';
-  
+
   let isLoading = false;
   let error = '';
   let darkMode = false;
   let mounted = false;
 
-  // Animation helpers
   const staggerDelay = 150;
-  
+
   onMount(() => {
-    // Check for dark mode preference in localStorage
-    if (localStorage.getItem('darkMode') === 'true') {
-      darkMode = true;
-      document.documentElement.classList.add('dark');
-    }
     mounted = true;
   });
-  
+
   async function createNewIdentity() {
     isLoading = true;
     error = '';
-    
+
     try {
       // Call to your Rust microservice to generate keypair
       const response = await fetch('/api/identity/create', {
         method: 'POST',
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to create identity');
       }
-      
+
       const data = await response.json();
-      
+
       localStorage.setItem('privateKey', data.privateKey);
       localStorage.setItem('publicKey', data.publicKey);
-      
+
       // Navigate to the dashboard
       goto('/dashboard');
     } catch (err) {
@@ -52,7 +46,7 @@
 </script>
 
 <div class="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
-  
+
   <main class="container mx-auto px-4 py-16">
     <!-- Hero Section -->
     {#if mounted}
@@ -63,9 +57,9 @@
         <p class="text-xl text-gray-600 dark:text-gray-300 mb-10 transition-colors duration-300">
           A secure platform for anonymous communication, powered by asymmetric cryptography.
         </p>
-        
+
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <button 
+          <button
             onclick={createNewIdentity}
             class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 transition-all duration-300 transform hover:scale-105 hover:cursor-pointer"
             disabled={isLoading}
@@ -77,20 +71,20 @@
               Create New Identity
             {/if}
           </button>
-          
+
           <a href="/login" class="px-6 py-3 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-300 transform hover:scale-105">
             Access Existing Identity
           </a>
         </div>
-        
+
         {#if error}
           <p class="mt-4 text-red-600 dark:text-red-400 transition-colors duration-300">{error}</p>
         {/if}
       </div>
     {/if}
-    
+
     {#if mounted}
-  <div class="max-w-4xl mx-auto mb-24" 
+  <div class="max-w-4xl mx-auto mb-24"
        transition:fly={{ y: 20, duration: 600, }}>
     <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl">
       <div class="flex flex-col space-y-4">
@@ -107,7 +101,7 @@
               Online • End-to-end encrypted
             </p>
           </div>
-          
+
           <!-- Settings button -->
           <button class="ml-auto p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -115,7 +109,7 @@
             </svg>
           </button>
         </div>
-        
+
         <!-- Chat messages with staggered animations -->
         <div class="space-y-3 overflow-y-auto max-h-96 py-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
           {#each [
@@ -127,10 +121,10 @@
             <div class="flex items-end {message.sender === 'me' ? 'justify-end' : ''}"
               in:fade={{ duration: 400, delay: message.delay }}
             >
-              <div class="{message.sender === 'me' ? 
-                         'bg-emerald-600 text-white' : 
-                         'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'} 
-                         p-3 rounded-lg {message.sender === 'me' ? 'rounded-br-none' : 'rounded-bl-none'} 
+              <div class="{message.sender === 'me' ?
+                         'bg-emerald-600 text-white' :
+                         'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}
+                         p-3 rounded-lg {message.sender === 'me' ? 'rounded-br-none' : 'rounded-bl-none'}
                          max-w-xs shadow-sm transition-all duration-300 hover:shadow-md transform hover:scale-[1.01]">
                 <p>{message.text}</p>
                 <p class="text-xs {message.sender === 'me' ? 'text-emerald-200' : 'text-gray-500 dark:text-gray-400'} mt-1">{message.time}</p>
@@ -138,12 +132,12 @@
             </div>
           {/each}
         </div>
-        
+
         <!-- New message indicator -->
         <div class="text-center text-xs text-gray-500 py-1 animate-pulse" in:fade={{ duration: 300, delay: 1200 }}>
           New messages
         </div>
-        
+
         <!-- Chat input with animations -->
         <div class="flex items-center mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 transition-all duration-300" in:slide={{ duration: 400, delay: 1100, axis: 'y' }}>
           <button class="p-2 text-gray-500 hover:text-emerald-600 dark:text-gray-400 dark:hover:text-emerald-400 transition-colors duration-200">
@@ -151,13 +145,13 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
           </button>
-          
+
           <input
             type="text"
             placeholder="Type your message..."
             class="flex-grow mx-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all duration-300 placeholder-gray-500 dark:placeholder-gray-400"
           />
-          
+
           <button class="p-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all duration-300 transform hover:scale-105 hover:rotate-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -166,7 +160,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Connection status indicator -->
     <div class="mt-2 text-center text-xs text-gray-500 dark:text-gray-400 flex items-center justify-center space-x-1"
          in:fade={{ duration: 300, delay: 1300 }}>
@@ -175,28 +169,28 @@
     </div>
   </div>
 {/if}
-    
+
     <!-- Features Section -->
     {#if mounted}
       <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto mb-24">
         {#each [
-          { 
-            icon: "🔒", 
-            title: "End-to-End Encryption", 
-            description: "All messages are encrypted with state-of-the-art asymmetric cryptography, ensuring only the intended recipient can read them." 
+          {
+            icon: "🔒",
+            title: "End-to-End Encryption",
+            description: "All messages are encrypted with state-of-the-art asymmetric cryptography, ensuring only the intended recipient can read them."
           },
-          { 
-            icon: "👤", 
-            title: "Total Anonymity", 
-            description: "No personally identifiable information is ever collected. Your identity is protected by cryptographic keypairs." 
+          {
+            icon: "👤",
+            title: "Total Anonymity",
+            description: "No personally identifiable information is ever collected. Your identity is protected by cryptographic keypairs."
           },
-          { 
-            icon: "🔥", 
-            title: "Self-Destructing Messages", 
-            description: "Set your messages to automatically delete after being read or after a specific time period." 
+          {
+            icon: "🔥",
+            title: "Self-Destructing Messages",
+            description: "Set your messages to automatically delete after being read or after a specific time period."
           }
         ] as feature, i}
-          <div 
+          <div
             class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transform transition-all duration-300 hover:-translate-y-1 cursor-pointer"
             in:fly={{ y: 20, duration: 800, delay: 600 + (i * staggerDelay) }}
           >
@@ -209,12 +203,12 @@
         {/each}
       </div>
     {/if}
-    
+
     <!-- How It Works Section -->
     {#if mounted}
       <div class="max-w-4xl mx-auto my-24" in:fade={{ duration: 800, delay: 900 }}>
         <h2 class="text-3xl font-bold text-center mb-10 text-gray-900 dark:text-white transition-colors duration-300">How It Works</h2>
-        
+
         <div class="space-y-12">
           {#each [
             {
@@ -259,7 +253,7 @@
         <p class="text-xl text-gray-600 dark:text-gray-300 mb-10 transition-colors duration-300">
           Join thousands of users who trust Piree for secure, anonymous communication.
         </p>
-        <button 
+        <button
           onclick={createNewIdentity}
           class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-white hover:text-indigo-700 hover:outline-indigo-700 hover:outline-2 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 transition-all duration-300 transform hover:scale-105 hover:cursor-pointer"
           disabled={isLoading}
