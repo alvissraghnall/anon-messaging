@@ -275,7 +275,7 @@
 										d="M5 13l4 4L19 7"
 									/>
 								</svg>
-								<span>Play guessing games—who sent the message?</span>
+								<span>Guess who sent the message?</span>
 							</li>
 						</ul>
 					</div>
@@ -296,7 +296,7 @@
 										d="M5 13l4 4L19 7"
 									/>
 								</svg>
-								<span>Create anonymous polls or surveys.</span>
+								<span>Create anonymous polls.</span>
 							</li>
 							<li class="flex items-start">
 								<svg
@@ -328,7 +328,7 @@
 										d="M5 13l4 4L19 7"
 									/>
 								</svg>
-								<span>Keep the fun alive—no pressure, just laughs!</span>
+								<span>Keep the fun alive, all for laughs!</span>
 							</li>
 						</ul>
 					</div>
