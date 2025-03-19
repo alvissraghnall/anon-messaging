@@ -6,12 +6,12 @@ use std::env;
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
-    pub id: Option<i64>,
+    // pub id: Option<i64>,
     pub user_id: String,
     pub public_key_hash: String,
-    pub encrypted_private_key: String,  // base64 encoded
+    pub encrypted_private_key: String,  // base64
     pub encryption_salt: String,		// already a base64 string
-    pub encryption_nonce: String,       // base64 encoded
+    pub encryption_nonce: String,       // base64
 }
 
 pub async fn create_db_pool() -> Result<SqlitePool, Error> {
@@ -46,7 +46,7 @@ pub async fn insert_user(
 pub async fn get_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<User, Error> {
     let user = sqlx::query_as!(
         User,
-        "SELECT id, user_id, public_key_hash, encrypted_private_key, encryption_salt, encryption_nonce 
+        "SELECT user_id, public_key_hash, encrypted_private_key, encryption_salt, encryption_nonce 
          FROM users WHERE user_id = $1",
         user_id
     )
