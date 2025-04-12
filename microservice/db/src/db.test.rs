@@ -18,7 +18,6 @@ async fn setup_test_db() -> SqlitePool {
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env.test");
 
-    // Drop the database if it exists and recreate it
     if sqlx::Sqlite::database_exists(&database_url).await.unwrap_or(false) {
         sqlx::Sqlite::drop_database(&database_url).await.unwrap();
     }
@@ -26,7 +25,6 @@ async fn setup_test_db() -> SqlitePool {
 
     let pool = SqlitePool::connect(&database_url).await.unwrap();
 
-    // Create the tables
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +33,23 @@ async fn setup_test_db() -> SqlitePool {
             encrypted_private_key TEXT NOT NULL,
             encryption_salt TEXT NOT NULL,
             encryption_nonce TEXT NOT NULL
-        )"
+        );
+        CREATE TABLE encrypted_messages (
+            id SERIAL PRIMARY KEY,
+            sender_id TEXT NOT NULL,
+            recipient_id TEXT NOT NULL,
+            encrypted_message TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT fk_sender
+                FOREIGN KEY (sender_id)
+                REFERENCES users(user_id)
+                ON DELETE CASCADE,
+            CONSTRAINT fk_recipient
+                FOREIGN KEY (recipient_id)
+                REFERENCES users(user_id)
+                ON DELETE CASCADE
+        );
+        "
     )
     .execute(&pool)
     .await
@@ -72,7 +86,6 @@ async fn test_insert_user() {
     .await;
     assert!(result.is_ok());
 
-    // Verify the user was inserted
     let user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(user.user_id, user_id);
     assert_eq!(user.public_key_hash, public_key_hash);
@@ -91,7 +104,6 @@ async fn test_get_user_by_id() {
     let encryption_salt = "salt_get";
     let encryption_nonce = "nonce_get";
 
-    // Insert a user first
     insert_user(
         &pool,
         user_id,
@@ -103,7 +115,6 @@ async fn test_get_user_by_id() {
     .await
     .unwrap();
 
-    // Test getting the user
     let user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(user.user_id, user_id);
     assert_eq!(user.public_key_hash, public_key_hash);
@@ -157,7 +168,6 @@ async fn test_insert_user_with_retry_success() {
     .await;
     assert!(result.is_ok());
 
-    // Verify the user was inserted
     let user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(user.user_id, user_id);
     assert_eq!(user.public_key_hash, public_key_hash);
@@ -176,7 +186,6 @@ async fn test_insert_user_with_retry_duplicate() {
     let encryption_salt = "salt_dup";
     let encryption_nonce = "nonce_dup";
 
-    // Insert first user
     insert_user(
         &pool,
         user_id,
@@ -188,13 +197,11 @@ async fn test_insert_user_with_retry_duplicate() {
     .await
     .unwrap();
 
-    // Different values for second user
     let different_hash = "different_hash";
     let different_key = "different_key";
     let different_salt = "different_salt";
     let different_nonce = "different_nonce";
 
-    // Try to insert duplicate - should generate a new ID internally
     let result = insert_user_with_retry(
         &pool,
         user_id,
@@ -206,11 +213,9 @@ async fn test_insert_user_with_retry_duplicate() {
     .await;
     assert!(result.is_ok());
         
-    // Verify first user still exists with original data
     let first_user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(first_user.public_key_hash, public_key_hash);
     
-    // Query all users with the given properties to find the newly created one
     let query = "SELECT user_id FROM users WHERE public_key_hash = ?";
     let rows = sqlx::query(query)
         .bind(different_hash)
@@ -218,15 +223,12 @@ async fn test_insert_user_with_retry_duplicate() {
         .await
         .unwrap();
     
-    // Should be exactly one user with the new hash
     assert_eq!(rows.len(), 1);
     
-    // The new user_id should be different from the original
     let new_user_id: String = rows[0].get(0);
     assert_ne!(new_user_id, user_id);
 	println!("{} {}", new_user_id, user_id);
     
-    // Verify the new user has all the correct data
     let new_user = get_user_by_id(&pool, &new_user_id).await.unwrap();
     assert_eq!(new_user.public_key_hash, different_hash);
     assert_eq!(new_user.encrypted_private_key, different_key);
@@ -238,7 +240,6 @@ async fn test_insert_user_with_retry_duplicate() {
 #[serial]
 async fn test_user_struct_serialization() {
     let user = User {
-        id: Some(1),
         user_id: "test_user".to_string(),
         public_key_hash: "test_hash".to_string(),
         encrypted_private_key: "encrypted_key".to_string(),
@@ -249,7 +250,6 @@ async fn test_user_struct_serialization() {
     let serialized = serde_json::to_string(&user).unwrap();
     let deserialized: User = serde_json::from_str(&serialized).unwrap();
 
-    assert_eq!(user.id, deserialized.id);
     assert_eq!(user.user_id, deserialized.user_id);
     assert_eq!(user.public_key_hash, deserialized.public_key_hash);
     assert_eq!(user.encrypted_private_key, deserialized.encrypted_private_key);
