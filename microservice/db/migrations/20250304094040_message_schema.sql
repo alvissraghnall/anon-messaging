@@ -1,13 +1,13 @@
 
 CREATE TABLE messages (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     sender_id TEXT NOT NULL,
     recipient_id TEXT NOT NULL,
     encrypted_content TEXT NOT NULL,
     parent_id INTEGER,
     signature TEXT,
-    is_read INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_read INTEGER DEFAULT 0 NOT NULL,
+    created_at INTEGER NOT NULL,
     CONSTRAINT fk_sender
         FOREIGN KEY (sender_id)
         REFERENCES users(user_id)

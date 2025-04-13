@@ -1,9 +1,37 @@
+use crate::unix_timestamp::unix_timestamp;
 use dotenv::dotenv;
 use serde::{Deserialize, Serialize};
-use sqlx::types::chrono::DateTime;
+use sqlx::types::chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use sqlx::{Error, SqlitePool};
 use std::env;
 use uuid::Uuid;
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct RawMessage {
+    pub id: i64,
+    pub sender_id: String,
+    pub recipient_id: String,
+    pub encrypted_content: String,
+    pub signature: Option<String>,
+    pub parent_id: Option<i64>,
+    pub created_at: i64,
+    pub is_read: i64,
+}
+
+impl RawMessage {
+    pub fn into_message(self) -> Message {
+        Message {
+            id: self.id,
+            sender_id: self.sender_id,
+            recipient_id: self.recipient_id,
+            encrypted_content: self.encrypted_content,
+            signature: self.signature,
+            parent_id: self.parent_id,
+            created_at: DateTime::from_timestamp(self.created_at, 0).unwrap_or_else(|| Utc::now()),
+            is_read: self.is_read != 0,
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Message {
@@ -13,7 +41,8 @@ pub struct Message {
     pub encrypted_content: String,
     pub parent_id: Option<i64>,
     pub signature: Option<String>,
-    pub created_at: DateTime,
+    #[serde(with = "unix_timestamp")]
+    pub created_at: DateTime<Utc>,
     pub is_read: bool,
 }
 
@@ -188,24 +217,22 @@ pub async fn create_message(
     encrypted_content: &str,
     signature: Option<&str>,
     parent_id: Option<i64>,
-    created_at: i64,
-) -> Result<i64, Error> {
+) -> Result<Option<i64>, Error> {
     let mut conn = pool.acquire().await?;
 
     let message_id = sqlx::query!(
         r#"
         INSERT INTO messages (sender_id, recipient_id, encrypted_content, signature, parent_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
         RETURNING id
         "#,
         sender_id,
         recipient_id,
         encrypted_content,
         signature,
-        parent_id,
-        created_at
+        parent_id
     )
-    .fetch_one(&mut conn)
+    .fetch_one(pool)
     .await?
     .id;
 
@@ -213,17 +240,27 @@ pub async fn create_message(
 }
 
 pub async fn get_message(pool: &SqlitePool, message_id: i64) -> Result<Option<Message>, Error> {
-    sqlx::query_as!(
-        Message,
+    let raw = sqlx::query_as!(
+        RawMessage,
         r#"
-        SELECT id, sender_id, recipient_id, encrypted_content, signature, parent_id, created_at, is_read
+        SELECT 
+            id, 
+            sender_id, 
+            recipient_id, 
+            encrypted_content, 
+            signature, 
+            parent_id, 
+            is_read, 
+            created_at
         FROM messages
         WHERE id = ?
         "#,
         message_id
     )
     .fetch_optional(pool)
-    .await
+    .await?;
+
+    Ok(raw.map(RawMessage::into_message))
 }
 
 pub async fn mark_message_read(pool: &SqlitePool, message_id: i64) -> Result<(), Error> {
@@ -247,45 +284,183 @@ pub async fn get_conversation(
     user2_id: &str,
     limit: Option<i64>,
 ) -> Result<Vec<Message>, Error> {
-    let messages = sqlx::query_as!(
-        Message,
+    #[derive(sqlx::FromRow)]
+    struct DbMessage {
+        id: i64,
+        sender_id: String,
+        recipient_id: String,
+        encrypted_content: String,
+        signature: Option<String>,
+        parent_id: Option<i64>,
+        is_read: i64,
+        created_at: i64,
+    }
+
+    let db_messages = sqlx::query_as::<_, DbMessage>(
         r#"
-        SELECT id, sender_id, recipient_id, encrypted_content, signature, parent_id, created_at, is_read
+        SELECT 
+            id,
+            sender_id,
+            recipient_id,
+            encrypted_content,
+            signature,
+            parent_id,
+            is_read,
+            CAST(strftime('%s', created_at) AS created_at
         FROM messages
         WHERE (sender_id = ? AND recipient_id = ?)
            OR (sender_id = ? AND recipient_id = ?)
         ORDER BY created_at DESC
         LIMIT ?
         "#,
-        user1_id,
-        user2_id,
-        user2_id,
-        user1_id,
-        limit.unwrap_or(100)
     )
+    .bind(user1_id)
+    .bind(user2_id)
+    .bind(user2_id)
+    .bind(user1_id)
+    .bind(limit.unwrap_or(100))
     .fetch_all(pool)
     .await?;
+
+    let messages = db_messages
+        .into_iter()
+        .map(|db_msg| Message {
+            id: db_msg.id,
+            sender_id: db_msg.sender_id,
+            recipient_id: db_msg.recipient_id,
+            encrypted_content: db_msg.encrypted_content,
+            signature: db_msg.signature,
+            parent_id: db_msg.parent_id,
+            is_read: db_msg.is_read != 0,
+            created_at: DateTime::from_timestamp(db_msg.created_at, 0)
+                .unwrap_or_else(|| Utc::now()),
+        })
+        .collect();
 
     Ok(messages)
 }
 
 pub async fn get_unread_messages(pool: &SqlitePool, user_id: &str) -> Result<Vec<Message>, Error> {
-    sqlx::query_as!(
-        Message,
+    #[derive(sqlx::FromRow)]
+    struct DbMessage {
+        id: i64,
+        sender_id: String,
+        recipient_id: String,
+        encrypted_content: String,
+        signature: Option<String>,
+        parent_id: Option<i64>,
+        is_read: i64,
+        created_at: i64,
+    }
+
+    let unread_messages = sqlx::query_as::<_, DbMessage>(
         r#"
         SELECT id, sender_id, recipient_id, encrypted_content, signature, parent_id, created_at,
-        CASE 
-            WHEN is_read = 1 THEN TRUE 
-            ELSE FALSE
-        END AS is_read
+        is_read
         FROM messages
         WHERE recipient_id = ? AND is_read = 0
         ORDER BY created_at ASC
         "#,
-        user_id
     )
+    .bind(user_id)
     .fetch_all(pool)
-    .await
+    .await?;
+
+    let messages = unread_messages
+        .into_iter()
+        .map(|db_msg| Message {
+            id: db_msg.id,
+            sender_id: db_msg.sender_id,
+            recipient_id: db_msg.recipient_id,
+            encrypted_content: db_msg.encrypted_content,
+            signature: db_msg.signature,
+            parent_id: db_msg.parent_id,
+            is_read: db_msg.is_read != 0,
+            created_at: DateTime::from_timestamp(db_msg.created_at, 0)
+                .unwrap_or_else(|| Utc::now()),
+        })
+        .collect();
+
+    Ok(messages)
+}
+
+pub async fn get_thread_replies(
+    pool: &SqlitePool,
+    parent_id: i64,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Vec<Message>, Error> {
+    let raw_messages = sqlx::query_as::<_, RawMessage>(
+        r#"
+        SELECT id, sender_id, recipient_id, encrypted_content, signature, parent_id, created_at, is_read
+        FROM messages
+        WHERE parent_id = ?
+        ORDER BY created_at ASC
+        LIMIT ? OFFSET ?
+        "#,
+    )
+    .bind(parent_id)
+    .bind(limit.unwrap_or(100))
+    .bind(limit.unwrap_or(0))
+    .fetch_all(pool)
+    .await?;
+
+    Ok(raw_messages
+        .into_iter()
+        .map(RawMessage::into_message)
+        .collect())
+}
+
+/// Gets a complete thread including the parent message and all replies
+pub async fn get_complete_thread(
+    pool: &SqlitePool,
+    thread_root_id: i64,
+    limit: Option<i64>,
+) -> Result<Vec<Message>, Error> {
+    // First get the parent message (might want to verify it exists and is a thread root)
+    let parent_message = match get_message(pool, thread_root_id).await? {
+        Some(msg) => msg,
+        None => return Err(Error::RowNotFound),
+    };
+
+    // get all replies
+    let mut replies = get_thread_replies(pool, thread_root_id, limit, None).await?;
+
+    // Combine into single thread (parent first, then replies)
+    let mut thread = Vec::with_capacity(1 + replies.len());
+    thread.push(parent_message);
+    thread.append(&mut replies);
+
+    Ok(thread)
+}
+
+/// Gets all threads for a user (parent messages that have replies)
+pub async fn get_user_threads(
+    pool: &SqlitePool,
+    user_id: &str,
+    limit: Option<i64>,
+) -> Result<Vec<Message>, Error> {
+    let raw_messages = sqlx::query_as::<_, RawMessage>(
+        r#"
+        SELECT DISTINCT m.id, m.sender_id, m.recipient_id, m.encrypted_content, 
+                m.signature, m.parent_id, m.created_at, m.is_read
+        FROM messages m
+        JOIN messages r ON m.id = r.parent_id
+        WHERE m.sender_id = ? OR m.recipient_id = ?
+        ORDER BY m.created_at DESC
+        LIMIT ?
+        "#,
+    )
+    .bind(user_id)
+    .bind(user_id)
+    .bind(limit.unwrap_or(20))
+    .fetch_all(pool)
+    .await?;
+
+    Ok(raw_messages
+        .into_iter()
+        .map(RawMessage::into_message)
+        .collect())
 }
 
 #[cfg(test)]

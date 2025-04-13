@@ -2,8 +2,8 @@ use super::*;
 use serial_test::serial;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::Row;
-use std::path::PathBuf;
 use std::env;
+use std::path::PathBuf;
 use std::sync::Once;
 
 static INIT: Once = Once::new();
@@ -13,12 +13,16 @@ async fn setup_test_db() -> SqlitePool {
     let env_file_path = root_dir.join(".env.test");
 
     INIT.call_once(|| {
-        dotenv::from_path(env_file_path).ok();
+        dotenv::from_path(env_file_path).expect("ENV TEST FILE MUST EXIST!");
     });
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env.test");
+    println!("{database_url}");
 
-    if sqlx::Sqlite::database_exists(&database_url).await.unwrap_or(false) {
+    if sqlx::Sqlite::database_exists(&database_url)
+        .await
+        .unwrap_or(false)
+    {
         sqlx::Sqlite::drop_database(&database_url).await.unwrap();
     }
     sqlx::Sqlite::create_database(&database_url).await.unwrap();
@@ -26,7 +30,8 @@ async fn setup_test_db() -> SqlitePool {
     let pool = SqlitePool::connect(&database_url).await.unwrap();
 
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS users (
+        "
+        CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT UNIQUE NOT NULL,
             public_key_hash TEXT NOT NULL,
@@ -34,12 +39,15 @@ async fn setup_test_db() -> SqlitePool {
             encryption_salt TEXT NOT NULL,
             encryption_nonce TEXT NOT NULL
         );
-        CREATE TABLE encrypted_messages (
-            id SERIAL PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             sender_id TEXT NOT NULL,
             recipient_id TEXT NOT NULL,
-            encrypted_message TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            encrypted_content TEXT NOT NULL,
+            parent_id INTEGER,
+            signature TEXT,
+            is_read INTEGER DEFAULT 0 NOT NULL,
+            created_at INTEGER NOT NULL,
             CONSTRAINT fk_sender
                 FOREIGN KEY (sender_id)
                 REFERENCES users(user_id)
@@ -49,7 +57,7 @@ async fn setup_test_db() -> SqlitePool {
                 REFERENCES users(user_id)
                 ON DELETE CASCADE
         );
-        "
+        ",
     )
     .execute(&pool)
     .await
@@ -212,23 +220,23 @@ async fn test_insert_user_with_retry_duplicate() {
     )
     .await;
     assert!(result.is_ok());
-        
+
     let first_user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(first_user.public_key_hash, public_key_hash);
-    
+
     let query = "SELECT user_id FROM users WHERE public_key_hash = ?";
     let rows = sqlx::query(query)
         .bind(different_hash)
         .fetch_all(&pool)
         .await
         .unwrap();
-    
+
     assert_eq!(rows.len(), 1);
-    
+
     let new_user_id: String = rows[0].get(0);
     assert_ne!(new_user_id, user_id);
-	println!("{} {}", new_user_id, user_id);
-    
+    println!("{} {}", new_user_id, user_id);
+
     let new_user = get_user_by_id(&pool, &new_user_id).await.unwrap();
     assert_eq!(new_user.public_key_hash, different_hash);
     assert_eq!(new_user.encrypted_private_key, different_key);
@@ -252,7 +260,10 @@ async fn test_user_struct_serialization() {
 
     assert_eq!(user.user_id, deserialized.user_id);
     assert_eq!(user.public_key_hash, deserialized.public_key_hash);
-    assert_eq!(user.encrypted_private_key, deserialized.encrypted_private_key);
+    assert_eq!(
+        user.encrypted_private_key,
+        deserialized.encrypted_private_key
+    );
     assert_eq!(user.encryption_salt, deserialized.encryption_salt);
     assert_eq!(user.encryption_nonce, deserialized.encryption_nonce);
 }
@@ -289,4 +300,146 @@ async fn test_concurrent_user_insertion() {
         let result = handle.await.unwrap();
         assert!(result.is_ok());
     }
+}
+
+#[tokio::test]
+async fn test_create_message() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+
+    let sender_id = Uuid::new_v4().to_string();
+    let recipient_id = Uuid::new_v4().to_string();
+
+    create_test_user(&pool, &sender_id);
+    create_test_user(&pool, &recipient_id);
+
+    let encrypted_content = "encrypted test message content";
+    let signature = Some("test signature");
+    let parent_id = None;
+
+    let message_id = create_message(
+        &pool,
+        &sender_id,
+        &recipient_id,
+        encrypted_content,
+        signature,
+        parent_id,
+    )
+    .await?;
+
+    assert!(message_id.is_some());
+    assert!(message_id.unwrap() > 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_message() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+
+    let sender_id = Uuid::new_v4().to_string();
+    let recipient_id = Uuid::new_v4().to_string();
+    let encrypted_content = "test message content";
+    let signature = Some("test signature");
+    let parent_id = None;
+
+    let message_id = create_message(
+        &pool,
+        &sender_id,
+        &recipient_id,
+        encrypted_content,
+        signature,
+        parent_id,
+    )
+    .await?
+    .unwrap();
+
+    let message = get_message(&pool, message_id).await?;
+
+    assert!(message.is_some());
+    let message = message.unwrap();
+    assert_eq!(message.id, message_id);
+    assert_eq!(message.sender_id, sender_id);
+    assert_eq!(message.recipient_id, recipient_id);
+    assert_eq!(message.encrypted_content, encrypted_content);
+    assert_eq!(message.signature, Some(signature.unwrap().to_string()));
+    assert_eq!(message.parent_id, parent_id);
+    assert!(!message.is_read);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_nonexistent_message() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+
+    let message = get_message(&pool, 999999).await?;
+
+    // Assert that no message was found
+    assert!(message.is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_create_message_with_parent() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+
+    let sender_id = Uuid::new_v4().to_string();
+    let recipient_id = Uuid::new_v4().to_string();
+    let encrypted_content = "parent message";
+
+    // Create parent message
+    let parent_id = create_message(
+        &pool,
+        &sender_id,
+        &recipient_id,
+        encrypted_content,
+        None,
+        None,
+    )
+    .await?
+    .unwrap();
+
+    // Create child message referencing the parent
+    let child_message_id = create_message(
+        &pool,
+        &recipient_id,
+        &sender_id,
+        "child message",
+        None,
+        Some(parent_id),
+    )
+    .await?
+    .unwrap();
+
+    // Retrieve the child message
+    let child_message = get_message(&pool, child_message_id).await?.unwrap();
+
+    assert_eq!(child_message.parent_id, Some(parent_id));
+
+    Ok(())
+}
+
+pub async fn create_test_user(pool: &SqlitePool, user_id: &str) -> Result<(), Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO users (
+            user_id,
+            public_key_hash,
+            encrypted_private_key,
+            encryption_salt,
+            encryption_nonce
+        )
+        VALUES (?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(user_id)
+    .bind(format!("hash_{}", user_id))
+    .bind(format!("encrypted_key_{}", user_id))
+    .bind("test_salt")
+    .bind("test_nonce")
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
