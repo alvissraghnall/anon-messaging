@@ -2,7 +2,7 @@ pub mod unix_timestamp {
     use serde::{self, Deserialize, Deserializer, Serializer};
     use sqlx::types::chrono::{DateTime, NaiveDateTime, Utc};
 
-    const FORMAT: &'static str = "%s.%6f";
+    const FORMAT: &'static str = "%s";
 
     pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
     where

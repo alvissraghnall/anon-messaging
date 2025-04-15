@@ -4,7 +4,11 @@ use serde::{Deserialize, Serialize};
 use sqlx::types::chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use sqlx::{Error, SqlitePool};
 use std::env;
+use std::path::PathBuf;
+use std::sync::Once;
 use uuid::Uuid;
+
+static INIT: Once = Once::new();
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct RawMessage {
@@ -58,6 +62,12 @@ pub struct User {
 
 pub async fn create_db_pool() -> Result<SqlitePool, Error> {
     dotenv().ok();
+    let root_dir = PathBuf::from(env::current_dir().unwrap().parent().unwrap());
+    let env_file_path = root_dir.join(".env.production");
+    INIT.call_once(|| {
+        dotenv::from_path(env_file_path).expect("ENV PRODUCTION FILE MUST EXIST!");
+    });
+
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     SqlitePool::connect(&database_url).await
 }
@@ -219,18 +229,20 @@ pub async fn create_message(
     parent_id: Option<i64>,
 ) -> Result<Option<i64>, Error> {
     let mut conn = pool.acquire().await?;
+    let current_time = Utc::now().timestamp();
 
     let message_id = sqlx::query!(
         r#"
         INSERT INTO messages (sender_id, recipient_id, encrypted_content, signature, parent_id, created_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?)
         RETURNING id
         "#,
         sender_id,
         recipient_id,
         encrypted_content,
         signature,
-        parent_id
+        parent_id,
+        current_time,
     )
     .fetch_one(pool)
     .await?
@@ -306,7 +318,7 @@ pub async fn get_conversation(
             signature,
             parent_id,
             is_read,
-            CAST(strftime('%s', created_at) AS created_at
+            created_at
         FROM messages
         WHERE (sender_id = ? AND recipient_id = ?)
            OR (sender_id = ? AND recipient_id = ?)
@@ -401,7 +413,7 @@ pub async fn get_thread_replies(
     )
     .bind(parent_id)
     .bind(limit.unwrap_or(100))
-    .bind(limit.unwrap_or(0))
+    .bind(offset.unwrap_or(0))
     .fetch_all(pool)
     .await?;
 
@@ -417,7 +429,6 @@ pub async fn get_complete_thread(
     thread_root_id: i64,
     limit: Option<i64>,
 ) -> Result<Vec<Message>, Error> {
-    // First get the parent message (might want to verify it exists and is a thread root)
     let parent_message = match get_message(pool, thread_root_id).await? {
         Some(msg) => msg,
         None => return Err(Error::RowNotFound),
@@ -434,7 +445,6 @@ pub async fn get_complete_thread(
     Ok(thread)
 }
 
-/// Gets all threads for a user (parent messages that have replies)
 pub async fn get_user_threads(
     pool: &SqlitePool,
     user_id: &str,
@@ -461,6 +471,94 @@ pub async fn get_user_threads(
         .into_iter()
         .map(RawMessage::into_message)
         .collect())
+}
+
+pub async fn store_refresh_token(
+    db: &SqlitePool,
+    id: &str,
+    user_id: &str,
+    token_hash: &str,
+    expires_at: i64,
+    device_info: Option<&str>,
+) -> Result<(), Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO refresh_tokens 
+        (id, user_id, token_hash, expires_at, device_info)
+        VALUES (?, ?, ?, datetime(?, 'unixepoch'), ?)
+        "#,
+        id,
+        user_id,
+        token_hash,
+        expires_at,
+        device_info
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn validate_refresh_token(
+    db: &SqlitePool,
+    user_id: &str,
+    token_hash: &str,
+) -> Result<bool, Error> {
+    let record = sqlx::query!(
+        r#"
+        SELECT id FROM refresh_tokens
+        WHERE user_id = ? AND token_hash = ? AND expires_at > CURRENT_TIMESTAMP
+        "#,
+        user_id,
+        token_hash
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(record.is_some())
+}
+
+pub async fn revoke_refresh_token(
+    db: &SqlitePool,
+    token_hash: &str,
+    reason: Option<&str>,
+) -> Result<(), Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO revoked_tokens (token_hash, reason)
+        SELECT token_hash, ? FROM refresh_tokens
+        WHERE token_hash = ?
+        "#,
+        reason,
+        token_hash
+    )
+    .execute(db)
+    .await?;
+
+    sqlx::query!(
+        r#"
+        DELETE FROM refresh_tokens
+        WHERE token_hash = ?
+        "#,
+        token_hash
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn cleanup_expired_tokens(db: &SqlitePool) -> Result<u64, Error> {
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM refresh_tokens
+        WHERE expires_at <= CURRENT_TIMESTAMP
+        "#
+    )
+    .execute(db)
+    .await?;
+
+    Ok(result.rows_affected())
 }
 
 #[cfg(test)]
