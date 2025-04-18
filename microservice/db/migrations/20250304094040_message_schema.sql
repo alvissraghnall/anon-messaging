@@ -10,10 +10,10 @@ CREATE TABLE messages (
     created_at INTEGER NOT NULL,
     CONSTRAINT fk_sender
         FOREIGN KEY (sender_id)
-        REFERENCES users(user_id)
+        REFERENCES users(id)
         ON DELETE CASCADE,
     CONSTRAINT fk_recipient
         FOREIGN KEY (recipient_id)
-        REFERENCES users(user_id)
+        REFERENCES users(id)
         ON DELETE CASCADE
 );

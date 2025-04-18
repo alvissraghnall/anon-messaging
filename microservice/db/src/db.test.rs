@@ -31,14 +31,15 @@ async fn setup_test_db() -> SqlitePool {
     sqlx::query(
         "
         DROP TABLE IF EXISTS users;
-        CREATE TABLE IF NOT EXISTS users (
-            user_id TEXT PRIMARY KEY NOT NULL,
-            public_key_hash TEXT NOT NULL,
-            encrypted_private_key TEXT NOT NULL,
-            encryption_salt TEXT NOT NULL,
-            encryption_nonce TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+        CREATE TABLE users (
+            id TEXT PRIMARY KEY NOT NULL,
+            username TEXT NOT NULL UNIQUE,
+            public_key TEXT NOT NULL UNIQUE,
+            public_key_hash TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
         );
       
         CREATE TABLE IF NOT EXISTS messages (
@@ -52,11 +53,11 @@ async fn setup_test_db() -> SqlitePool {
             created_at INTEGER NOT NULL,
             CONSTRAINT fk_sender
                 FOREIGN KEY (sender_id)
-                REFERENCES users(user_id)
+                REFERENCES users(id)
                 ON DELETE CASCADE,
             CONSTRAINT fk_recipient
                 FOREIGN KEY (recipient_id)
-                REFERENCES users(user_id)
+                REFERENCES users(id)
                 ON DELETE CASCADE
         );
         CREATE TABLE IF NOT EXISTS revoked_tokens (
@@ -71,7 +72,7 @@ async fn setup_test_db() -> SqlitePool {
             device_info TEXT,
             expires_at TIMESTAMP NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         ",
     )
@@ -93,73 +94,51 @@ async fn test_create_db_pool() {
 #[serial]
 async fn test_insert_user() {
     let pool = setup_test_db().await;
-    let user_id = "test_user";
     let public_key_hash = "test_hash";
-    let encrypted_private_key = "encrypted_key";
-    let encryption_salt = "salt";
-    let encryption_nonce = "nonce";
+    let public_key = "encrypted_key";
+    let username = "salt";
 
-    let result = insert_user(
-        &pool,
-        user_id,
-        public_key_hash,
-        encrypted_private_key,
-        encryption_salt,
-        encryption_nonce,
-    )
-    .await;
+    let result = insert_user(&pool, public_key_hash, public_key, username).await;
     assert!(result.is_ok());
 
-    let user = get_user_by_id(&pool, user_id).await.unwrap();
-    assert_eq!(user.user_id, user_id);
+    let user = get_user_by_id(&pool, username).await.unwrap();
+    assert_eq!(user.id.get_version(), Some(uuid::Version::SortRand));
     assert_eq!(user.public_key_hash, public_key_hash);
-    assert_eq!(user.encrypted_private_key, encrypted_private_key);
-    assert_eq!(user.encryption_salt, encryption_salt);
-    assert_eq!(user.encryption_nonce, encryption_nonce);
+    assert_eq!(user.public_key, public_key);
+    assert_eq!(user.username, username);
+    assert_eq!(user.last_login, None);
+
+    let now = Utc::now().naive_utc();
+    assert!(user.created_at <= now);
+    assert!(user.created_at >= now - chrono::Duration::seconds(5));
+    assert!(user.updated_at <= now);
+    assert!(user.updated_at >= now - chrono::Duration::seconds(5));
 }
 
 #[tokio::test]
 #[serial]
 async fn test_get_user_by_id() {
     let pool = setup_test_db().await;
-    let user_id = "test_user_get";
+    let username = "test_user_get";
     let public_key_hash = "test_hash_get";
-    let encrypted_private_key = "encrypted_key_get";
-    let encryption_salt = "salt_get";
-    let encryption_nonce = "nonce_get";
+    let public_key = "encrypted_key_get";
 
-    insert_user(
-        &pool,
-        user_id,
-        public_key_hash,
-        encrypted_private_key,
-        encryption_salt,
-        encryption_nonce,
-    )
-    .await
-    .unwrap();
-
-    let user = get_user_by_id(&pool, user_id).await.unwrap();
-    assert_eq!(user.user_id, user_id);
+    let user_id = insert_user(&pool, public_key_hash, public_key, username)
+        .await
+        .unwrap();
+    let user_id_uuid = Uuid::parse_str(user_id.as_str()).unwrap();
+    let user = get_user_by_id(&pool, user_id_uuid).await.unwrap();
+    assert_eq!(user.id.get_version(), Some(uuid::Version::SortRand));
     assert_eq!(user.public_key_hash, public_key_hash);
-    assert_eq!(user.encrypted_private_key, encrypted_private_key);
-    assert_eq!(user.encryption_salt, encryption_salt);
-    assert_eq!(user.encryption_nonce, encryption_nonce);
+    assert_eq!(user.public_key, public_key);
 }
 
 #[tokio::test]
 #[serial]
 async fn test_get_user_by_id_not_found() {
     let pool = setup_test_db().await;
-    let result = get_user_by_id(&pool, "nonexistent_user").await;
+    let result = get_user_by_id(&pool, Uuid::now_v7()).await;
     assert!(result.is_err());
-}
-
-#[tokio::test]
-async fn test_generate_user_id() {
-    let user_id = generate_user_id();
-    assert_eq!(user_id.len(), 8);
-    assert!(user_id.chars().all(|c| c.is_ascii_hexdigit()));
 }
 
 #[tokio::test]

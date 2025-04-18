@@ -1,4 +1,4 @@
-use crate::unix_timestamp::unix_timestamp;
+use crate::models::{Message, RawMessage, User};
 use dotenv::dotenv;
 use serde::{Deserialize, Serialize};
 use sqlx::types::chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
@@ -9,56 +9,6 @@ use std::sync::Once;
 use uuid::Uuid;
 
 static INIT: Once = Once::new();
-
-#[derive(Debug, sqlx::FromRow)]
-pub struct RawMessage {
-    pub id: i64,
-    pub sender_id: String,
-    pub recipient_id: String,
-    pub encrypted_content: String,
-    pub signature: Option<String>,
-    pub parent_id: Option<i64>,
-    pub created_at: i64,
-    pub is_read: i64,
-}
-
-impl RawMessage {
-    pub fn into_message(self) -> Message {
-        Message {
-            id: self.id,
-            sender_id: self.sender_id,
-            recipient_id: self.recipient_id,
-            encrypted_content: self.encrypted_content,
-            signature: self.signature,
-            parent_id: self.parent_id,
-            created_at: DateTime::from_timestamp(self.created_at, 0).unwrap_or_else(|| Utc::now()),
-            is_read: self.is_read != 0,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-pub struct Message {
-    pub id: i64,
-    pub sender_id: String,
-    pub recipient_id: String,
-    pub encrypted_content: String,
-    pub parent_id: Option<i64>,
-    pub signature: Option<String>,
-    #[serde(with = "unix_timestamp")]
-    pub created_at: DateTime<Utc>,
-    pub is_read: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-pub struct User {
-    // pub id: Option<i64>,
-    pub user_id: String,
-    pub public_key_hash: String,
-    pub encrypted_private_key: String, // base64
-    pub encryption_salt: String,       // already a base64 string
-    pub encryption_nonce: String,      // base64
-}
 
 pub async fn create_db_pool() -> Result<SqlitePool, Error> {
     dotenv().ok();
@@ -74,31 +24,38 @@ pub async fn create_db_pool() -> Result<SqlitePool, Error> {
 
 pub async fn insert_user(
     pool: &SqlitePool,
-    user_id: &str,
     public_key_hash: &str,
-    encrypted_private_key: &str,
-    encryption_salt: &str,
-    encryption_nonce: &str,
-) -> Result<(), Error> {
-    sqlx::query!(
-        "INSERT INTO users (user_id, public_key_hash, encrypted_private_key, encryption_salt, encryption_nonce) 
-         VALUES ($1, $2, $3, $4, $5)",
-        user_id,
+    public_key: &str,
+    username: &str,
+) -> Result<String, Error> {
+    let id = Uuid::now_v7();
+    let user_id = sqlx::query!(
+        r#"INSERT INTO users (id, public_key, public_key_hash, username)  
+         VALUES (?, ?, ?, ?) RETURNING id
+         "#,
+        id,
+        public_key,
         public_key_hash,
-		encrypted_private_key,
-        encryption_salt,
-        encryption_nonce
+        username
     )
-    .execute(pool)
-    .await?;
-    Ok(())
+    .fetch_one(pool)
+    .await?
+    .id;
+    Ok(user_id)
 }
 
-pub async fn get_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<User, Error> {
+pub async fn get_user_by_id(pool: &SqlitePool, user_id: Uuid) -> Result<User, Error> {
     let user = sqlx::query_as!(
         User,
-        "SELECT user_id, public_key_hash, encrypted_private_key, encryption_salt, encryption_nonce 
-         FROM users WHERE user_id = $1",
+        r#"SELECT 
+            id as "id: uuid::Uuid", 
+            public_key, 
+            public_key_hash, 
+            username, 
+            created_at, 
+            last_login, 
+            updated_at
+         FROM users WHERE id = ?"#,
         user_id
     )
     .fetch_one(pool)
@@ -106,73 +63,26 @@ pub async fn get_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<User, Er
     Ok(user)
 }
 
-pub fn generate_user_id() -> String {
-    // Generate a UUID and take the first 8 characters
-    let uuid = Uuid::new_v4();
-    let uuid_hex = uuid.as_simple().to_string();
-    uuid_hex[..8].to_string()
+pub async fn get_users(pool: &SqlitePool, limit: Option<i64>) -> Result<Vec<User>, Error> {
+    let users = sqlx::query_as::<_, User>(
+        r#"
+            SELECT id as "id: uuid:Uuid",
+                    public_key_hash,
+                    public_key,
+                    username,
+                    created_at,
+                    last_login,
+                    updated_at
+            FROM users
+            LIMIT ?
+        "#,
+    )
+    .bind(limit.unwrap_or(1000))
+    .fetch_all(pool)
+    .await?;
+
+    Ok(users)
 }
-
-pub async fn insert_user_with_retry(
-    pool: &SqlitePool,
-    user_id: &str,
-    public_key_hash: &str,
-    encrypted_private_key: &str,
-    encryption_salt: &str,
-    encryption_nonce: &str,
-) -> Result<String, String> {
-    let mut retries = 0;
-    let mut final_user_id = user_id.to_string();
-
-    loop {
-        match insert_user(
-            pool,
-            &final_user_id,
-            public_key_hash,
-            encrypted_private_key,
-            encryption_salt,
-            encryption_nonce,
-        )
-        .await
-        {
-            Ok(_) => return Ok(final_user_id),
-            Err(Error::Database(err)) if err.is_unique_violation() => {
-                // If the user_id already exists, generate a new one
-                retries += 1;
-                if retries > 5 {
-                    return Err("Failed to generate a unique user_id after 5 retries".to_string());
-                }
-                final_user_id = generate_user_id();
-            }
-            Err(e) => return Err(e.to_string()),
-        }
-    }
-}
-
-/*
-pub async fn create_user(
-    pool: &SqlitePool,
-    custom_user_id: Option<String>,
-    public_key: &[u8],
-) -> Result<String, String> {
-    let public_key_hash = {
-        let mut hasher = Sha256::new();
-        hasher.update(public_key);
-        format!("{:x}", hasher.finalize())
-    };
-
-    let user_id = match custom_user_id {
-        Some(id) => {
-            validate_user_id(&id)?;
-            id
-        }
-        None => generate_user_id(),
-    };
-
-    insert_user_with_retry(&pool, &user_id, &public_key_hash).await?;
-    Ok(user_id)
-}
-*/
 
 // async fn store_encrypted_message(
 //     pool: &SqlitePool,
@@ -209,7 +119,7 @@ async fn fetch_public_key_hash(
         r#"
         SELECT public_key_hash
         FROM users
-        WHERE user_id = $1
+        WHERE id = ?
         "#,
         user_id
     )
