@@ -101,7 +101,12 @@ async fn test_insert_user() {
     let result = insert_user(&pool, public_key_hash, public_key, username).await;
     assert!(result.is_ok());
 
-    let user = get_user_by_id(&pool, username).await.unwrap();
+    let user = get_user_by_id(
+        &pool,
+        Uuid::parse_str(&result.unwrap()).expect("Was not expected to err"),
+    )
+    .await
+    .unwrap();
     assert_eq!(user.id.get_version(), Some(uuid::Version::SortRand));
     assert_eq!(user.public_key_hash, public_key_hash);
     assert_eq!(user.public_key, public_key);
@@ -142,125 +147,28 @@ async fn test_get_user_by_id_not_found() {
 }
 
 #[tokio::test]
-async fn test_generate_user_id_uniqueness() {
-    let mut ids = std::collections::HashSet::new();
-    for _ in 0..1000 {
-        let id = generate_user_id();
-        assert!(ids.insert(id), "Generated duplicate ID");
-    }
-}
-
-#[tokio::test]
-#[serial]
-async fn test_insert_user_with_retry_success() {
-    let pool = setup_test_db().await;
-    let user_id = "test_user_retry";
-    let public_key_hash = "test_hash_retry";
-    let encrypted_private_key = "encrypted_key_retry";
-    let encryption_salt = "salt_retry";
-    let encryption_nonce = "nonce_retry";
-
-    let result = insert_user_with_retry(
-        &pool,
-        user_id,
-        public_key_hash,
-        encrypted_private_key,
-        encryption_salt,
-        encryption_nonce,
-    )
-    .await;
-    assert!(result.is_ok());
-
-    let user = get_user_by_id(&pool, user_id).await.unwrap();
-    assert_eq!(user.user_id, user_id);
-    assert_eq!(user.public_key_hash, public_key_hash);
-    assert_eq!(user.encrypted_private_key, encrypted_private_key);
-    assert_eq!(user.encryption_salt, encryption_salt);
-    assert_eq!(user.encryption_nonce, encryption_nonce);
-}
-
-#[tokio::test]
-#[serial]
-async fn test_insert_user_with_retry_duplicate() {
-    let pool = setup_test_db().await;
-    let user_id = "test_user_dup";
-    let public_key_hash = "test_hash_dup";
-    let encrypted_private_key = "encrypted_key_dup";
-    let encryption_salt = "salt_dup";
-    let encryption_nonce = "nonce_dup";
-
-    insert_user(
-        &pool,
-        user_id,
-        public_key_hash,
-        encrypted_private_key,
-        encryption_salt,
-        encryption_nonce,
-    )
-    .await
-    .unwrap();
-
-    let different_hash = "different_hash";
-    let different_key = "different_key";
-    let different_salt = "different_salt";
-    let different_nonce = "different_nonce";
-
-    let result = insert_user_with_retry(
-        &pool,
-        user_id,
-        different_hash,
-        different_key,
-        different_salt,
-        different_nonce,
-    )
-    .await;
-    assert!(result.is_ok());
-
-    let first_user = get_user_by_id(&pool, user_id).await.unwrap();
-    assert_eq!(first_user.public_key_hash, public_key_hash);
-
-    let query = "SELECT user_id FROM users WHERE public_key_hash = ?";
-    let rows = sqlx::query(query)
-        .bind(different_hash)
-        .fetch_all(&pool)
-        .await
-        .unwrap();
-
-    assert_eq!(rows.len(), 1);
-
-    let new_user_id: String = rows[0].get(0);
-    assert_ne!(new_user_id, user_id);
-    println!("{} {}", new_user_id, user_id);
-
-    let new_user = get_user_by_id(&pool, &new_user_id).await.unwrap();
-    assert_eq!(new_user.public_key_hash, different_hash);
-    assert_eq!(new_user.encrypted_private_key, different_key);
-    assert_eq!(new_user.encryption_salt, different_salt);
-    assert_eq!(new_user.encryption_nonce, different_nonce);
-}
-
-#[tokio::test]
 #[serial]
 async fn test_user_struct_serialization() {
     let user = User {
-        user_id: "test_user".to_string(),
+        id: Uuid::now_v7(),
+        username: "test_user".to_string(),
         public_key_hash: "test_hash".to_string(),
-        encrypted_private_key: "encrypted_key".to_string(),
-        encryption_salt: "salt".to_string(),
-        encryption_nonce: "nonce".to_string(),
+        public_key: "encrypted_key".to_string(),
+        created_at: Utc::now().naive_utc(),
+        last_login: Option::Some(Utc::now().naive_utc()),
+        updated_at: Utc::now().naive_utc(),
     };
 
     let serialized = serde_json::to_string(&user).unwrap();
     let deserialized: User = serde_json::from_str(&serialized).unwrap();
 
-    assert_eq!(user.user_id, deserialized.user_id);
+    assert_eq!(user.username, deserialized.username);
     assert_eq!(user.public_key_hash, deserialized.public_key_hash);
-    assert_eq!(
-        user.encrypted_private_key,
-        deserialized.encrypted_private_key
-    );
-    assert_eq!(user.encryption_salt, deserialized.encryption_salt);
-    assert_eq!(user.encryption_nonce, deserialized.encryption_nonce);
+    assert_eq!(user.public_key, deserialized.public_key);
+    assert_eq!(user.created_at, deserialized.created_at);
+    assert_eq!(user.updated_at, deserialized.updated_at);
+    assert_eq!(user.id, deserialized.id);
+    assert_eq!(user.last_login, deserialized.last_login);
 }
 
 #[tokio::test]
@@ -272,21 +180,11 @@ async fn test_concurrent_user_insertion() {
     for i in 0..10 {
         let pool = pool.clone();
         let handle = tokio::spawn(async move {
-            let user_id = format!("concurrent_user_{}", i);
+            let username = format!("concurrent_user_{}", i);
             let public_key_hash = format!("concurrent_hash_{}", i);
-            let encrypted_private_key = format!("concurrent_key_{}", i);
-            let encryption_salt = format!("concurrent_salt_{}", i);
-            let encryption_nonce = format!("concurrent_nonce_{}", i);
+            let public_key = format!("concurrent_key_{}", i);
 
-            insert_user_with_retry(
-                &pool,
-                &user_id,
-                &public_key_hash,
-                &encrypted_private_key,
-                &encryption_salt,
-                &encryption_nonce,
-            )
-            .await
+            insert_user(&pool, &public_key_hash, &public_key, &username).await
         });
         handles.push(handle);
     }
@@ -935,24 +833,17 @@ async fn test_get_thread_replies_with_limit_offset() -> Result<(), Error> {
 }
 
 pub async fn create_test_user(pool: &SqlitePool, user_id: &str) -> Result<(), Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO users (
-            user_id,
-            public_key_hash,
-            encrypted_private_key,
-            encryption_salt,
-            encryption_nonce
-        )
-        VALUES (?, ?, ?, ?, ?)
-        "#,
+    let id = Uuid::now_v7();
+    let user = sqlx::query!(
+        r#"INSERT INTO users (id, public_key, public_key_hash, username)
+         VALUES (?, ?, ?, ?)
+         "#,
+        id,
+        "public_key",
+        "public_key_hash",
+        "username"
     )
-    .bind(user_id)
-    .bind(format!("hash_{}", user_id))
-    .bind(format!("encrypted_key_{}", user_id))
-    .bind("test_salt")
-    .bind("test_nonce")
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
 
     Ok(())
