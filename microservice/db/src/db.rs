@@ -27,21 +27,23 @@ pub async fn insert_user(
     public_key_hash: &str,
     public_key: &str,
     username: &str,
-) -> Result<String, Error> {
+) -> Result<Uuid, Error> {
     let id = Uuid::now_v7();
+    let id_as_str = id.to_string();
+
     let user_id = sqlx::query!(
         r#"INSERT INTO users (id, public_key, public_key_hash, username)  
-         VALUES (?, ?, ?, ?) RETURNING id
+         VALUES (?, ?, ?, ?)
          "#,
         id,
         public_key,
         public_key_hash,
         username
     )
-    .fetch_one(pool)
-    .await?
-    .id;
-    Ok(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(id)
 }
 
 pub async fn get_user_by_id(pool: &SqlitePool, user_id: Uuid) -> Result<User, Error> {
@@ -66,7 +68,7 @@ pub async fn get_user_by_id(pool: &SqlitePool, user_id: Uuid) -> Result<User, Er
 pub async fn get_users(pool: &SqlitePool, limit: Option<i64>) -> Result<Vec<User>, Error> {
     let users = sqlx::query_as::<_, User>(
         r#"
-            SELECT id as "id: uuid:Uuid",
+            SELECT id as "id: uuid::Uuid",
                     public_key_hash,
                     public_key,
                     username,
@@ -113,7 +115,7 @@ pub async fn get_users(pool: &SqlitePool, limit: Option<i64>) -> Result<Vec<User
 
 async fn fetch_public_key_hash(
     pool: &sqlx::SqlitePool,
-    user_id: &str,
+    user_id: Uuid,
 ) -> Result<String, sqlx::Error> {
     let public_key_hash = sqlx::query!(
         r#"
@@ -132,13 +134,13 @@ async fn fetch_public_key_hash(
 
 pub async fn create_message(
     pool: &SqlitePool,
-    sender_id: &str,
-    recipient_id: &str,
+    sender_id: Uuid,
+    recipient_id: Uuid,
     encrypted_content: &str,
     signature: Option<&str>,
     parent_id: Option<i64>,
 ) -> Result<Option<i64>, Error> {
-    let mut conn = pool.acquire().await?;
+    let conn = pool.acquire().await?;
     let current_time = Utc::now().timestamp();
 
     let message_id = sqlx::query!(
@@ -167,8 +169,8 @@ pub async fn get_message(pool: &SqlitePool, message_id: i64) -> Result<Option<Me
         r#"
         SELECT 
             id, 
-            sender_id, 
-            recipient_id, 
+            sender_id as "sender_id: uuid::Uuid",
+            recipient_id as "recipient_id: uuid::Uuid",
             encrypted_content, 
             signature, 
             parent_id, 
@@ -202,15 +204,15 @@ pub async fn mark_message_read(pool: &SqlitePool, message_id: i64) -> Result<(),
 
 pub async fn get_conversation(
     pool: &SqlitePool,
-    user1_id: &str,
-    user2_id: &str,
+    user1_id: Uuid,
+    user2_id: Uuid,
     limit: Option<i64>,
 ) -> Result<Vec<Message>, Error> {
     #[derive(sqlx::FromRow)]
     struct DbMessage {
         id: i64,
-        sender_id: String,
-        recipient_id: String,
+        sender_id: Uuid,
+        recipient_id: Uuid,
         encrypted_content: String,
         signature: Option<String>,
         parent_id: Option<i64>,
@@ -222,8 +224,8 @@ pub async fn get_conversation(
         r#"
         SELECT 
             id,
-            sender_id,
-            recipient_id,
+            sender_id as "sender_id: uuid::Uuid",
+            recipient_id as "recipient_id: uuid::Uuid",
             encrypted_content,
             signature,
             parent_id,
@@ -262,12 +264,12 @@ pub async fn get_conversation(
     Ok(messages)
 }
 
-pub async fn get_unread_messages(pool: &SqlitePool, user_id: &str) -> Result<Vec<Message>, Error> {
+pub async fn get_unread_messages(pool: &SqlitePool, user_id: Uuid) -> Result<Vec<Message>, Error> {
     #[derive(sqlx::FromRow)]
     struct DbMessage {
         id: i64,
-        sender_id: String,
-        recipient_id: String,
+        sender_id: Uuid,
+        recipient_id: Uuid,
         encrypted_content: String,
         signature: Option<String>,
         parent_id: Option<i64>,
@@ -277,8 +279,15 @@ pub async fn get_unread_messages(pool: &SqlitePool, user_id: &str) -> Result<Vec
 
     let unread_messages = sqlx::query_as::<_, DbMessage>(
         r#"
-        SELECT id, sender_id, recipient_id, encrypted_content, signature, parent_id, created_at,
-        is_read
+        SELECT 
+            id, 
+            sender_id AS "sender_id: uuid::Uuid", 
+            recipient_id AS "recipient_id: uuid::Uuid", 
+            encrypted_content, 
+            signature, 
+            parent_id, 
+            created_at,
+            is_read
         FROM messages
         WHERE recipient_id = ? AND is_read = 0
         ORDER BY created_at ASC
@@ -314,7 +323,15 @@ pub async fn get_thread_replies(
 ) -> Result<Vec<Message>, Error> {
     let raw_messages = sqlx::query_as::<_, RawMessage>(
         r#"
-        SELECT id, sender_id, recipient_id, encrypted_content, signature, parent_id, created_at, is_read
+        SELECT
+            id, 
+            sender_id AS "sender_id: uuid::Uuid", 
+            recipient_id AS "recipient_id: uuid::Uuid", 
+            encrypted_content, 
+            signature, 
+            parent_id, 
+            created_at, 
+            is_read
         FROM messages
         WHERE parent_id = ?
         ORDER BY created_at ASC
@@ -362,7 +379,10 @@ pub async fn get_user_threads(
 ) -> Result<Vec<Message>, Error> {
     let raw_messages = sqlx::query_as::<_, RawMessage>(
         r#"
-        SELECT DISTINCT m.id, m.sender_id, m.recipient_id, m.encrypted_content, 
+        SELECT DISTINCT m.id, 
+                m.sender_id AS "m.sender_id: uuid::Uuid", 
+                m.recipient_id AS "m.recipient_id: uuid::Uuid", 
+                m.encrypted_content, 
                 m.signature, m.parent_id, m.created_at, m.is_read
         FROM messages m
         JOIN messages r ON m.id = r.parent_id

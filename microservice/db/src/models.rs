@@ -25,11 +25,13 @@ pub struct User {
     pub updated_at: NaiveDateTime,
 }
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug, FromRow, Serialize, Deserialize)]
 pub struct RawMessage {
     pub id: i64,
-    pub sender_id: String,
-    pub recipient_id: String,
+    #[serde(with = "uuid::serde::simple")]
+    pub sender_id: Uuid,
+    #[serde(with = "uuid::serde::simple")]
+    pub recipient_id: Uuid,
     pub encrypted_content: String,
     pub signature: Option<String>,
     pub parent_id: Option<i64>,
@@ -52,11 +54,13 @@ impl RawMessage {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Message {
     pub id: i64,
-    pub sender_id: String,
-    pub recipient_id: String,
+    #[serde(with = "uuid::serde::simple")]
+    pub sender_id: Uuid,
+    #[serde(with = "uuid::serde::simple")]
+    pub recipient_id: Uuid,
     pub encrypted_content: String,
     pub parent_id: Option<i64>,
     pub signature: Option<String>,

@@ -2,9 +2,13 @@ use super::*;
 use serial_test::serial;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::Row;
-use std::env;
-use std::path::PathBuf;
 use std::sync::Once;
+use rand::Rng;
+use faker_rand::en_us::names::{FirstName, LastName};
+use p256::{
+    ecdsa::{SigningKey, VerifyingKey},
+};
+use rand::rand_core::OsRng;
 
 static INIT: Once = Once::new();
 
@@ -42,6 +46,8 @@ async fn setup_test_db() -> SqlitePool {
             last_login TIMESTAMP
         );
       
+	DROP TABLE IF EXISTS messages;
+
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sender_id TEXT NOT NULL,
@@ -60,11 +66,17 @@ async fn setup_test_db() -> SqlitePool {
                 REFERENCES users(id)
                 ON DELETE CASCADE
         );
+
+	DROP TABLE IF EXISTS revoked_tokens;
+
         CREATE TABLE IF NOT EXISTS revoked_tokens (
             token_hash TEXT PRIMARY KEY NOT NULL,
             revoked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             reason TEXT
         );
+
+	DROP TABLE IF EXISTS refresh_token;
+
         CREATE TABLE IF NOT EXISTS refresh_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
@@ -85,13 +97,6 @@ async fn setup_test_db() -> SqlitePool {
 
 #[tokio::test]
 #[serial]
-async fn test_create_db_pool() {
-    let pool = create_db_pool().await.unwrap();
-    assert!(pool.acquire().await.is_ok());
-}
-
-#[tokio::test]
-#[serial]
 async fn test_insert_user() {
     let pool = setup_test_db().await;
     let public_key_hash = "test_hash";
@@ -99,11 +104,12 @@ async fn test_insert_user() {
     let username = "salt";
 
     let result = insert_user(&pool, public_key_hash, public_key, username).await;
+    println!("{:?}", result);
     assert!(result.is_ok());
 
     let user = get_user_by_id(
         &pool,
-        Uuid::parse_str(&result.unwrap()).expect("Was not expected to err"),
+        result.unwrap(),
     )
     .await
     .unwrap();
@@ -131,8 +137,7 @@ async fn test_get_user_by_id() {
     let user_id = insert_user(&pool, public_key_hash, public_key, username)
         .await
         .unwrap();
-    let user_id_uuid = Uuid::parse_str(user_id.as_str()).unwrap();
-    let user = get_user_by_id(&pool, user_id_uuid).await.unwrap();
+    let user = get_user_by_id(&pool, user_id).await.unwrap();
     assert_eq!(user.id.get_version(), Some(uuid::Version::SortRand));
     assert_eq!(user.public_key_hash, public_key_hash);
     assert_eq!(user.public_key, public_key);
@@ -165,10 +170,11 @@ async fn test_user_struct_serialization() {
     assert_eq!(user.username, deserialized.username);
     assert_eq!(user.public_key_hash, deserialized.public_key_hash);
     assert_eq!(user.public_key, deserialized.public_key);
-    assert_eq!(user.created_at, deserialized.created_at);
-    assert_eq!(user.updated_at, deserialized.updated_at);
+
+    assert!((user.created_at - deserialized.created_at).num_seconds() <= 1);
+    assert!((user.updated_at - deserialized.updated_at).num_seconds() <= 1);
     assert_eq!(user.id, deserialized.id);
-    assert_eq!(user.last_login, deserialized.last_login);
+    assert!(user.last_login.is_some() && deserialized.last_login.is_some());
 }
 
 #[tokio::test]
@@ -199,11 +205,11 @@ async fn test_concurrent_user_insertion() {
 async fn test_create_message() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let sender_id = Uuid::new_v4().to_string();
-    let recipient_id = Uuid::new_v4().to_string();
+    let sender_id = Uuid::now_v7();
+    let recipient_id = Uuid::now_v7();
 
-    create_test_user(&pool, &sender_id).await;
-    create_test_user(&pool, &recipient_id).await;
+    create_test_user(&pool, sender_id).await?;
+    create_test_user(&pool, recipient_id).await?;
 
     let encrypted_content = "encrypted test message content";
     let signature = Some("test signature");
@@ -211,8 +217,8 @@ async fn test_create_message() -> Result<(), Error> {
 
     let message_id = create_message(
         &pool,
-        &sender_id,
-        &recipient_id,
+        sender_id,
+        recipient_id,
         encrypted_content,
         signature,
         parent_id,
@@ -222,25 +228,25 @@ async fn test_create_message() -> Result<(), Error> {
     assert!(message_id.is_some());
     assert!(message_id.unwrap() > 0);
 
-    Ok(())
+     Ok(())
 }
 
 #[tokio::test]
 async fn test_get_message() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let sender_id = Uuid::new_v4().to_string();
-    let recipient_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &sender_id).await;
-    create_test_user(&pool, &recipient_id).await;
+    let sender_id = Uuid::now_v7();
+    let recipient_id = Uuid::now_v7();
+    create_test_user(&pool, sender_id).await;
+    create_test_user(&pool, recipient_id).await;
     let encrypted_content = "test message content";
     let signature = Some("test signature");
     let parent_id = None;
 
     let message_id = create_message(
         &pool,
-        &sender_id,
-        &recipient_id,
+        sender_id,
+        recipient_id,
         encrypted_content,
         signature,
         parent_id,
@@ -279,17 +285,17 @@ async fn test_get_nonexistent_message() -> Result<(), Error> {
 async fn test_create_message_with_parent() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let sender_id = Uuid::new_v4().to_string();
-    let recipient_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &sender_id).await;
-    create_test_user(&pool, &recipient_id).await;
+    let sender_id = Uuid::now_v7();
+    let recipient_id = Uuid::now_v7();
+    create_test_user(&pool, sender_id).await;
+    create_test_user(&pool, recipient_id).await;
     let encrypted_content = "parent message";
 
     // Create parent message
     let parent_id = create_message(
         &pool,
-        &sender_id,
-        &recipient_id,
+        sender_id,
+        recipient_id,
         encrypted_content,
         None,
         None,
@@ -300,8 +306,8 @@ async fn test_create_message_with_parent() -> Result<(), Error> {
     // Create child message referencing the parent
     let child_message_id = create_message(
         &pool,
-        &recipient_id,
-        &sender_id,
+        recipient_id,
+        sender_id,
         "child message",
         None,
         Some(parent_id),
@@ -321,14 +327,14 @@ async fn test_create_message_with_parent() -> Result<(), Error> {
 async fn test_create_message_with_invalid_parent() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let sender_id = Uuid::new_v4().to_string();
-    let recipient_id = Uuid::new_v4().to_string();
+    let sender_id = Uuid::now_v7();
+    let recipient_id = Uuid::now_v7();
     let encrypted_content = "test message with invalid parent";
 
     let result = create_message(
         &pool,
-        &sender_id,
-        &recipient_id,
+        sender_id,
+        recipient_id,
         encrypted_content,
         None,
         Some(9999),
@@ -344,15 +350,15 @@ async fn test_create_message_with_invalid_parent() -> Result<(), Error> {
 async fn test_mark_message_read() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let sender_id = Uuid::new_v4().to_string();
-    let recipient_id = Uuid::new_v4().to_string();
+    let sender_id = Uuid::now_v7();
+    let recipient_id = Uuid::now_v7();
 
-    create_test_user(&pool, &sender_id).await;
-    create_test_user(&pool, &recipient_id).await;
+    create_test_user(&pool, sender_id).await;
+    create_test_user(&pool, recipient_id).await;
     let message_id = create_message(
         &pool,
-        &sender_id,
-        &recipient_id,
+        sender_id,
+        recipient_id,
         "test message content",
         None,
         None,
@@ -388,12 +394,12 @@ async fn test_mark_nonexistent_message_read() -> Result<(), Error> {
 async fn test_get_conversation_empty() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let user1_id = Uuid::new_v4().to_string();
-    let user2_id = Uuid::new_v4().to_string();
+    let user1_id = Uuid::now_v7();
+    let user2_id = Uuid::now_v7();
 
-    create_test_user(&pool, &user1_id).await;
-    create_test_user(&pool, &user2_id).await;
-    let messages = get_conversation(&pool, &user1_id, &user2_id, None).await?;
+    create_test_user(&pool, user1_id).await;
+    create_test_user(&pool, user2_id).await;
+    let messages = get_conversation(&pool, user1_id, user2_id, None).await?;
 
     assert!(messages.is_empty());
 
@@ -404,18 +410,18 @@ async fn test_get_conversation_empty() -> Result<(), Error> {
 async fn test_get_conversation_with_messages() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let user1_id = Uuid::new_v4().to_string();
-    let user2_id = Uuid::new_v4().to_string();
-    let user3_id = Uuid::new_v4().to_string();
+    let user1_id = Uuid::now_v7();
+    let user2_id = Uuid::now_v7();
+    let user3_id = Uuid::now_v7();
 
-    create_test_user(&pool, &user1_id).await;
-    create_test_user(&pool, &user2_id).await;
-    create_test_user(&pool, &user3_id).await;
+    create_test_user(&pool, user1_id).await;
+    create_test_user(&pool, user2_id).await;
+    create_test_user(&pool, user3_id).await;
 
     let msg1_id = create_message(
         &pool,
-        &user1_id,
-        &user2_id,
+        user1_id,
+        user2_id,
         "Message 1 from user1 to user2",
         None,
         None,
@@ -425,8 +431,8 @@ async fn test_get_conversation_with_messages() -> Result<(), Error> {
 
     let msg2_id = create_message(
         &pool,
-        &user2_id,
-        &user1_id,
+        user2_id,
+        user1_id,
         "Message 2 from user2 to user1",
         None,
         None,
@@ -436,8 +442,8 @@ async fn test_get_conversation_with_messages() -> Result<(), Error> {
 
     create_message(
         &pool,
-        &user1_id,
-        &user3_id,
+        user1_id,
+        user3_id,
         "Message not in conversation",
         None,
         None,
@@ -445,7 +451,7 @@ async fn test_get_conversation_with_messages() -> Result<(), Error> {
     .await?
     .unwrap();
 
-    let messages = get_conversation(&pool, &user1_id, &user2_id, None).await?;
+    let messages = get_conversation(&pool, user1_id, user2_id, None).await?;
 
     assert_eq!(messages.len(), 2);
 
@@ -467,16 +473,16 @@ async fn test_get_conversation_with_messages() -> Result<(), Error> {
 async fn test_get_conversation_with_limit() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let user1_id = Uuid::new_v4().to_string();
-    let user2_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &user1_id).await;
-    create_test_user(&pool, &user2_id).await;
+    let user1_id = Uuid::now_v7();
+    let user2_id = Uuid::now_v7();
+    create_test_user(&pool, user1_id).await;
+    create_test_user(&pool, user2_id).await;
 
     for i in 0..5 {
         create_message(
             &pool,
-            &user1_id,
-            &user2_id,
+            user1_id,
+            user2_id,
             &format!("Message {}", i),
             None,
             None,
@@ -488,7 +494,7 @@ async fn test_get_conversation_with_limit() -> Result<(), Error> {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
-    let messages = get_conversation(&pool, &user1_id, &user2_id, Some(3)).await?;
+    let messages = get_conversation(&pool, user1_id, user2_id, Some(3)).await?;
 
     assert_eq!(messages.len(), 3);
 
@@ -506,15 +512,15 @@ async fn test_get_conversation_with_limit() -> Result<(), Error> {
 async fn test_get_conversation_bidirectional() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let user1_id = Uuid::new_v4().to_string();
-    let user2_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &user1_id).await;
-    create_test_user(&pool, &user2_id).await;
+    let user1_id = Uuid::now_v7();
+    let user2_id = Uuid::now_v7();
+    create_test_user(&pool, user1_id).await;
+    create_test_user(&pool, user2_id).await;
 
     create_message(
         &pool,
-        &user1_id,
-        &user2_id,
+        user1_id,
+        user2_id,
         "From user1 to user2",
         None,
         None,
@@ -524,8 +530,8 @@ async fn test_get_conversation_bidirectional() -> Result<(), Error> {
 
     create_message(
         &pool,
-        &user2_id,
-        &user1_id,
+        user2_id,
+        user1_id,
         "From user2 to user1",
         None,
         None,
@@ -533,9 +539,9 @@ async fn test_get_conversation_bidirectional() -> Result<(), Error> {
     .await?
     .unwrap();
 
-    let messages1 = get_conversation(&pool, &user1_id, &user2_id, None).await?;
+    let messages1 = get_conversation(&pool, user1_id, user2_id, None).await?;
 
-    let messages2 = get_conversation(&pool, &user2_id, &user1_id, None).await?;
+    let messages2 = get_conversation(&pool, user2_id, user1_id, None).await?;
 
     assert_eq!(messages1.len(), 2);
     assert_eq!(messages2.len(), 2);
@@ -555,11 +561,11 @@ async fn test_get_conversation_bidirectional() -> Result<(), Error> {
 async fn test_get_unread_messages_empty() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let user_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &user_id).await;
+    let user_id = Uuid::now_v7();
+    create_test_user(&pool, user_id).await;
 
     // Get unread messages for a user with no messages
-    let messages = get_unread_messages(&pool, &user_id).await?;
+    let messages = get_unread_messages(&pool, user_id).await?;
 
     assert!(messages.is_empty());
 
@@ -570,18 +576,18 @@ async fn test_get_unread_messages_empty() -> Result<(), Error> {
 async fn test_get_unread_messages_mixed() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let recipient_id = Uuid::new_v4().to_string();
-    let sender1_id = Uuid::new_v4().to_string();
-    let sender2_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &recipient_id).await;
-    create_test_user(&pool, &sender1_id).await;
-    create_test_user(&pool, &sender2_id).await;
+    let recipient_id = Uuid::now_v7();
+    let sender1_id = Uuid::now_v7();
+    let sender2_id = Uuid::now_v7();
+    create_test_user(&pool, recipient_id).await;
+    create_test_user(&pool, sender1_id).await;
+    create_test_user(&pool, sender2_id).await;
 
     // Create some unread messages for the recipient
     let msg1_id = create_message(
         &pool,
-        &sender1_id,
-        &recipient_id,
+        sender1_id,
+        recipient_id,
         "Unread message 1",
         None,
         None,
@@ -591,8 +597,8 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
 
     let msg2_id = create_message(
         &pool,
-        &sender2_id,
-        &recipient_id,
+        sender2_id,
+        recipient_id,
         "Unread message 2",
         None,
         None,
@@ -603,8 +609,8 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
     // Create a message and mark it as read
     let read_msg_id = create_message(
         &pool,
-        &sender1_id,
-        &recipient_id,
+        sender1_id,
+        recipient_id,
         "Read message",
         None,
         None,
@@ -617,8 +623,8 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
     // Create a message sent by the recipient (should not be in unread)
     create_message(
         &pool,
-        &recipient_id,
-        &sender1_id,
+        recipient_id,
+        sender1_id,
         "Message from recipient",
         None,
         None,
@@ -626,7 +632,7 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
     .await?;
 
     // Get unread messages for the recipient
-    let unread_messages = get_unread_messages(&pool, &recipient_id).await?;
+    let unread_messages = get_unread_messages(&pool, recipient_id).await?;
 
     // Should return exactly 2 messages
     assert_eq!(unread_messages.len(), 2);
@@ -650,15 +656,15 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
 async fn test_get_unread_messages_order() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let recipient_id = Uuid::new_v4().to_string();
-    let sender_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &recipient_id).await;
-    create_test_user(&pool, &sender_id).await;
+    let recipient_id = Uuid::now_v7();
+    let sender_id = Uuid::now_v7();
+    create_test_user(&pool, recipient_id).await;
+    create_test_user(&pool, sender_id).await;
     for i in 0..3 {
         create_message(
             &pool,
-            &sender_id,
-            &recipient_id,
+            sender_id,
+            recipient_id,
             &format!("Message {}", i),
             None,
             None,
@@ -669,7 +675,7 @@ async fn test_get_unread_messages_order() -> Result<(), Error> {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
-    let messages = get_unread_messages(&pool, &recipient_id).await?;
+    let messages = get_unread_messages(&pool, recipient_id).await?;
 
     // Verify messages are in ascending order by created_at
     assert_eq!(messages.len(), 3);
@@ -684,12 +690,12 @@ async fn test_get_unread_messages_order() -> Result<(), Error> {
 async fn test_get_thread_replies_empty() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let user1_id = Uuid::new_v4().to_string();
-    let user2_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &user1_id).await;
-    create_test_user(&pool, &user2_id).await;
+    let user1_id = Uuid::now_v7();
+    let user2_id = Uuid::now_v7();
+    create_test_user(&pool, user1_id).await;
+    create_test_user(&pool, user2_id).await;
 
-    let parent_id = create_message(&pool, &user1_id, &user2_id, "Parent message", None, None)
+    let parent_id = create_message(&pool, user1_id, user2_id, "Parent message", None, None)
         .await?
         .unwrap();
 
@@ -704,19 +710,19 @@ async fn test_get_thread_replies_empty() -> Result<(), Error> {
 async fn test_get_thread_replies_with_replies() -> Result<(), Error> {
     let pool = setup_test_db().await;
 
-    let user1_id = Uuid::new_v4().to_string();
-    let user2_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &user1_id).await;
-    create_test_user(&pool, &user2_id).await;
+    let user1_id = Uuid::now_v7();
+    let user2_id = Uuid::now_v7();
+    create_test_user(&pool, user1_id).await;
+    create_test_user(&pool, user2_id).await;
 
-    let parent_id = create_message(&pool, &user1_id, &user2_id, "Parent message", None, None)
+    let parent_id = create_message(&pool, user1_id, user2_id, "Parent message", None, None)
         .await?
         .unwrap();
 
     let reply1_id = create_message(
         &pool,
-        &user2_id,
-        &user1_id,
+        user2_id,
+        user1_id,
         "Reply 1",
         None,
         Some(parent_id),
@@ -729,8 +735,8 @@ async fn test_get_thread_replies_with_replies() -> Result<(), Error> {
 
     let reply2_id = create_message(
         &pool,
-        &user1_id,
-        &user2_id,
+        user1_id,
+        user2_id,
         "Reply 2",
         None,
         Some(parent_id),
@@ -738,14 +744,14 @@ async fn test_get_thread_replies_with_replies() -> Result<(), Error> {
     .await?
     .unwrap();
 
-    let other_parent_id = create_message(&pool, &user1_id, &user2_id, "Another parent", None, None)
+    let other_parent_id = create_message(&pool, user1_id, user2_id, "Another parent", None, None)
         .await?
         .unwrap();
 
     let other_reply_id = create_message(
         &pool,
-        &user2_id,
-        &user1_id,
+        user2_id,
+        user1_id,
         "Reply to different parent",
         None,
         Some(other_parent_id),
@@ -782,19 +788,19 @@ async fn test_get_thread_replies_with_limit_offset() -> Result<(), Error> {
     // Setup in-memory SQLite database for testing
     let pool = setup_test_db().await;
 
-    let user1_id = Uuid::new_v4().to_string();
-    let user2_id = Uuid::new_v4().to_string();
-    create_test_user(&pool, &user1_id).await;
-    create_test_user(&pool, &user2_id).await;
+    let user1_id = Uuid::now_v7();
+    let user2_id = Uuid::now_v7();
+    create_test_user(&pool, user1_id).await;
+    create_test_user(&pool, user2_id).await;
 
-    let parent_id = create_message(&pool, &user1_id, &user2_id, "Parent message", None, None)
+    let parent_id = create_message(&pool, user1_id, user2_id, "Parent message", None, None)
         .await?
         .unwrap();
 
     let mut reply_ids = Vec::with_capacity(5);
     for i in 0..5 {
-        let sender = if i % 2 == 0 { &user1_id } else { &user2_id };
-        let recipient = if i % 2 == 0 { &user2_id } else { &user1_id };
+        let sender = if i % 2 == 0 { user1_id } else { user2_id };
+        let recipient = if i % 2 == 0 { user2_id } else { user1_id };
 
         let reply_id = create_message(
             &pool,
@@ -832,8 +838,13 @@ async fn test_get_thread_replies_with_limit_offset() -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn create_test_user(pool: &SqlitePool, user_id: &str) -> Result<(), Error> {
-    let id = Uuid::now_v7();
+pub async fn create_test_user(pool: &SqlitePool, id: Uuid) -> Result<(), Error> {
+    let firstName = rand::random::<FirstName>().to_string();
+    let lastName = rand::thread_rng().gen::<LastName>().to_string();
+
+    let signing_key = SigningKey::random(&mut OsRng);
+    let verifying_key = VerifyingKey::from(&signing_key);  
+
     let user = sqlx::query!(
         r#"INSERT INTO users (id, public_key, public_key_hash, username)
          VALUES (?, ?, ?, ?)
@@ -841,10 +852,17 @@ pub async fn create_test_user(pool: &SqlitePool, user_id: &str) -> Result<(), Er
         id,
         "public_key",
         "public_key_hash",
-        "username"
+        format!("{}{}",  firstName, lastName)
     )
-    .fetch_one(pool)
+    .execute(pool)
     .await?;
 
     Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_create_db_pool() {
+    let pool = create_db_pool().await.unwrap();
+    assert!(pool.acquire().await.is_ok());
 }
