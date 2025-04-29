@@ -132,6 +132,61 @@ async fn fetch_public_key_hash(
     Ok(public_key_hash)
 }
 
+pub async fn update_user(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    new_username: Option<&str>,
+    new_public_key: Option<&str>,
+    new_public_key_hash: Option<&str>,
+) -> Result<(), Error> {
+    let current_user = get_user_by_id(&pool, user_id).await?;
+
+    if let Some(username) = new_username {
+        if username.is_empty() {
+            return Err(Error::InvalidArgument("Username cannot be empty".to_string()));
+        }
+    }
+    
+    if let Some(public_key) = new_public_key {
+        if public_key.is_empty() {
+            return Err(Error::InvalidArgument("Username cannot be empty".to_string()));
+
+        }
+    }
+    
+    if let Some(public_key_hash) = new_public_key_hash {
+        if public_key_hash.is_empty() {
+            return Err(Error::InvalidArgument("Username cannot be empty".to_string()));
+        }
+    }
+    
+    let username = new_username.unwrap_or(&current_user.username);
+    let public_key = new_public_key.unwrap_or(&current_user.public_key);
+    let public_key_hash = new_public_key_hash.unwrap_or(&current_user.public_key_hash);
+    let updated_at = Utc::now().naive_utc();
+
+    sqlx::query!(
+        r#"
+        UPDATE users 
+        SET 
+            username = ?,
+            public_key = ?,
+            public_key_hash = ?,
+            updated_at = ?
+        WHERE id = ?
+        "#,
+        username,
+        public_key,
+        public_key_hash,
+        updated_at,
+        user_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn create_message(
     pool: &SqlitePool,
     sender_id: Uuid,
@@ -224,8 +279,8 @@ pub async fn get_conversation(
         r#"
         SELECT 
             id,
-            sender_id as "sender_id: uuid::Uuid",
-            recipient_id as "recipient_id: uuid::Uuid",
+            sender_id,
+            recipient_id,
             encrypted_content,
             signature,
             parent_id,
@@ -281,8 +336,8 @@ pub async fn get_unread_messages(pool: &SqlitePool, user_id: Uuid) -> Result<Vec
         r#"
         SELECT 
             id, 
-            sender_id AS "sender_id: uuid::Uuid", 
-            recipient_id AS "recipient_id: uuid::Uuid", 
+            sender_id,
+            recipient_id,
             encrypted_content, 
             signature, 
             parent_id, 
@@ -325,8 +380,8 @@ pub async fn get_thread_replies(
         r#"
         SELECT
             id, 
-            sender_id AS "sender_id: uuid::Uuid", 
-            recipient_id AS "recipient_id: uuid::Uuid", 
+            sender_id,
+            recipient_id,
             encrypted_content, 
             signature, 
             parent_id, 
@@ -405,19 +460,17 @@ pub async fn get_user_threads(
 
 pub async fn store_refresh_token(
     db: &SqlitePool,
-    id: &str,
-    user_id: &str,
+    user_id: Uuid,
     token_hash: &str,
     expires_at: i64,
     device_info: Option<&str>,
 ) -> Result<(), Error> {
     sqlx::query!(
         r#"
-        INSERT INTO refresh_tokens 
-        (id, user_id, token_hash, expires_at, device_info)
-        VALUES (?, ?, ?, datetime(?, 'unixepoch'), ?)
+            INSERT INTO refresh_tokens 
+            (user_id, token_hash, expires_at, device_info)
+            VALUES (?, ?, datetime(?, 'unixepoch'), ?)
         "#,
-        id,
         user_id,
         token_hash,
         expires_at,
@@ -431,7 +484,7 @@ pub async fn store_refresh_token(
 
 pub async fn validate_refresh_token(
     db: &SqlitePool,
-    user_id: &str,
+    user_id: Uuid,
     token_hash: &str,
 ) -> Result<bool, Error> {
     let record = sqlx::query!(

@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
-    token_hash TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
     device_info TEXT,
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -3,12 +3,14 @@ use serial_test::serial;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::Row;
 use std::sync::Once;
-use rand::Rng;
-use faker_rand::en_us::names::{FirstName, LastName};
+use faker_rand::en_us::names::{FullName};
 use p256::{
     ecdsa::{SigningKey, VerifyingKey},
+    elliptic_curve::rand_core::OsRng,
 };
-use rand::rand_core::OsRng;
+use rand::Rng;
+use sha2::{Digest, Sha256};
+use tokio::time::Duration;
 
 static INIT: Once = Once::new();
 
@@ -80,7 +82,7 @@ async fn setup_test_db() -> SqlitePool {
         CREATE TABLE IF NOT EXISTS refresh_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
-            token_hash TEXT NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
             device_info TEXT,
             expires_at TIMESTAMP NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -490,7 +492,6 @@ async fn test_get_conversation_with_limit() -> Result<(), Error> {
         .await?
         .unwrap();
 
-        // small delay to ensure different created_at timestamps
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
@@ -564,7 +565,6 @@ async fn test_get_unread_messages_empty() -> Result<(), Error> {
     let user_id = Uuid::now_v7();
     create_test_user(&pool, user_id).await;
 
-    // Get unread messages for a user with no messages
     let messages = get_unread_messages(&pool, user_id).await?;
 
     assert!(messages.is_empty());
@@ -583,7 +583,6 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
     create_test_user(&pool, sender1_id).await;
     create_test_user(&pool, sender2_id).await;
 
-    // Create some unread messages for the recipient
     let msg1_id = create_message(
         &pool,
         sender1_id,
@@ -606,7 +605,6 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
     .await?
     .unwrap();
 
-    // Create a message and mark it as read
     let read_msg_id = create_message(
         &pool,
         sender1_id,
@@ -620,7 +618,6 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
 
     mark_message_read(&pool, read_msg_id).await?;
 
-    // Create a message sent by the recipient (should not be in unread)
     create_message(
         &pool,
         recipient_id,
@@ -631,10 +628,8 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
     )
     .await?;
 
-    // Get unread messages for the recipient
     let unread_messages = get_unread_messages(&pool, recipient_id).await?;
 
-    // Should return exactly 2 messages
     assert_eq!(unread_messages.len(), 2);
 
     // Verify the returned messages are the expected unread ones
@@ -671,7 +666,6 @@ async fn test_get_unread_messages_order() -> Result<(), Error> {
         )
         .await?;
 
-        // Add a small delay to ensure different created_at timestamps
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
@@ -730,7 +724,6 @@ async fn test_get_thread_replies_with_replies() -> Result<(), Error> {
     .await?
     .unwrap();
 
-    // Add a delay to ensure different timestamps
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
     let reply2_id = create_message(
@@ -762,16 +755,13 @@ async fn test_get_thread_replies_with_replies() -> Result<(), Error> {
     // Get replies to the first thread
     let replies = get_thread_replies(&pool, parent_id, None, None).await?;
 
-    // Should return exactly 2 replies
     assert_eq!(replies.len(), 2);
 
-    // Verify they are the correct replies
     let reply_ids: Vec<i64> = replies.iter().map(|m| m.id).collect();
     assert!(reply_ids.contains(&reply1_id));
     assert!(reply_ids.contains(&reply2_id));
     assert!(!reply_ids.contains(&other_reply_id));
 
-    // Verify all messages have the correct parent_id
     for reply in &replies {
         assert_eq!(reply.parent_id, Some(parent_id));
     }
@@ -785,7 +775,6 @@ async fn test_get_thread_replies_with_replies() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_get_thread_replies_with_limit_offset() -> Result<(), Error> {
-    // Setup in-memory SQLite database for testing
     let pool = setup_test_db().await;
 
     let user1_id = Uuid::now_v7();
@@ -838,21 +827,383 @@ async fn test_get_thread_replies_with_limit_offset() -> Result<(), Error> {
     Ok(())
 }
 
+#[tokio::test]
+#[serial]
+async fn test_store_and_validate_refresh_token() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    create_test_user(&pool, user_id).await;
+    let token_hash = "test_token_hash";
+    let expires_at = Utc::now().timestamp() + 3600;
+
+    store_refresh_token(
+        &pool,
+        user_id,
+        token_hash,
+        expires_at,
+        Some("Test Device"),
+    )
+    .await?;
+
+    let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
+    assert!(is_valid);
+
+    let is_valid = validate_refresh_token(&pool, user_id, "wrong_hash").await?;
+    assert!(!is_valid);
+
+    let is_valid = validate_refresh_token(&pool, Uuid::now_v7(), token_hash).await?;
+    assert!(!is_valid);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_expired_token_validation() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    create_test_user(&pool, user_id).await;
+    let token_hash = "expired_token_hash";
+    let expires_at = Utc::now().timestamp() - 3600;
+
+    store_refresh_token(
+        &pool,
+        user_id,
+        token_hash,
+        expires_at,
+        None,
+    )
+    .await?;
+
+    let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
+    assert!(!is_valid, "Expired token should not validate");
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_revoke_refresh_token() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    create_test_user(&pool, user_id).await;
+    let token_hash = "token_to_revoke";
+    let expires_at = Utc::now().timestamp() + 3600;
+
+    store_refresh_token(
+        &pool,
+        user_id,
+        token_hash,
+        expires_at,
+        None,
+    )
+    .await?;
+
+    let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
+    assert!(is_valid);
+
+    revoke_refresh_token(&pool, token_hash, Some("test revocation")).await?;
+
+    // Verify token no longer validates
+    let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
+    assert!(!is_valid);
+
+    // Check revoked tokens table
+    let revoked = sqlx::query!(
+        "SELECT token_hash FROM revoked_tokens WHERE token_hash = ?",
+        token_hash
+    )
+    .fetch_optional(&pool)
+    .await?;
+    assert!(revoked.is_some(), "Token should be in revoked table");
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_cleanup_expired_tokens() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    create_test_user(&pool, user_id).await;
+
+    store_refresh_token(
+        &pool,
+        user_id,
+        "valid_hash",
+        Utc::now().timestamp() + 3600,
+        None,
+    )
+    .await?;
+
+    store_refresh_token(
+        &pool,
+        user_id,
+        "expired_hash",
+        Utc::now().timestamp() - 3600,
+        None,
+    )
+    .await?;
+
+    let cleaned = cleanup_expired_tokens(&pool).await?;
+    assert_eq!(cleaned, 1, "Should clean up 1 expired token");
+
+    let remaining = sqlx::query!(
+        "SELECT COUNT(*) as count FROM refresh_tokens WHERE user_id = ?",
+        user_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(remaining.count, 1, "Only valid token should remain");
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_token_uniqueness() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    create_test_user(&pool, user_id).await;
+
+    let token_hash = "unique_hash";
+    let expires_at = Utc::now().timestamp() + 3600;
+
+    store_refresh_token(
+        &pool,
+        user_id,
+        token_hash,
+        expires_at,
+        None,
+    )
+    .await?;
+
+    let result = store_refresh_token(
+        &pool,
+        user_id,
+        token_hash,
+        expires_at,
+        None,
+    )
+    .await;
+
+    assert!(
+        result.is_err(),
+        "Should not allow duplicate token hashes"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_revoked_token_cannot_validate() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+    
+    let user_id = Uuid::now_v7();
+    create_test_user(&pool, user_id).await?;
+    
+    let token_hash = "revocable_token_hash";
+    let expires_at = Utc::now().timestamp() + 3600;
+
+    store_refresh_token(
+        &pool,
+        user_id,
+        token_hash,
+        expires_at,
+        Some("Test Device"),
+    )
+    .await?;
+
+    let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
+    assert!(is_valid, "Token should validate before revocation");
+
+    revoke_refresh_token(&pool, token_hash, Some("test revocation")).await?;
+
+    let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
+    assert!(!is_valid, "Revoked token should not validate");
+
+    // Verify token appears in revoked table
+    let revoked = sqlx::query!(
+        "SELECT reason FROM revoked_tokens WHERE token_hash = ?",
+        token_hash
+    )
+    .fetch_optional(&pool)
+    .await?;
+    
+    assert_eq!(revoked.unwrap().reason, Some("test revocation".to_string()));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_update_user_no_changes() {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    
+    create_test_user(&pool, user_id).await.unwrap();
+    
+    let original_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    let result = update_user(&pool, user_id, None, None, None).await;
+    
+    assert!(result.is_ok());
+    
+    let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    assert_eq!(updated_user.username, original_user.username);
+    assert_eq!(updated_user.public_key, original_user.public_key);
+    assert_eq!(updated_user.public_key_hash, original_user.public_key_hash);
+    
+    assert!(updated_user.updated_at > original_user.updated_at);
+}
+
+#[tokio::test]
+async fn test_update_user_username() {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    
+    create_test_user(&pool, user_id).await.unwrap();
+    
+    let original_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    let new_username = "updated_username";
+    let result = update_user(&pool, user_id, Some(new_username), None, None).await;
+    
+    assert!(result.is_ok());
+    
+    let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    assert_eq!(updated_user.username, new_username);
+    
+    assert_eq!(updated_user.public_key, original_user.public_key);
+    assert_eq!(updated_user.public_key_hash, original_user.public_key_hash);
+    
+    assert!(updated_user.updated_at > original_user.updated_at);
+}
+
+#[tokio::test]
+async fn test_update_user_public_key() {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    
+    create_test_user(&pool, user_id).await.unwrap();
+    
+    let original_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    let new_public_key = "updated_public_key";
+    let new_public_key_hash = "updated_public_key_hash";
+    let result = update_user(
+        &pool, 
+        user_id, 
+        None, 
+        Some(new_public_key), 
+        Some(new_public_key_hash)
+    ).await;
+    
+    assert!(result.is_ok());
+    
+    let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    assert_eq!(updated_user.public_key, new_public_key);
+    assert_eq!(updated_user.public_key_hash, new_public_key_hash);
+    
+    assert_eq!(updated_user.username, original_user.username);
+    
+    assert!(updated_user.updated_at > original_user.updated_at);
+}
+
+#[tokio::test]
+async fn test_update_user_all_fields() {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    
+    create_test_user(&pool, user_id).await.unwrap();
+    
+    let new_username = "completely_updated_user";
+    let new_public_key = "completely_updated_public_key";
+    let new_public_key_hash = "completely_updated_public_key_hash";
+    
+    let result = update_user(
+        &pool, 
+        user_id, 
+        Some(new_username), 
+        Some(new_public_key), 
+        Some(new_public_key_hash)
+    ).await;
+    
+    assert!(result.is_ok());
+    
+    let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    assert_eq!(updated_user.username, new_username);
+    assert_eq!(updated_user.public_key, new_public_key);
+    assert_eq!(updated_user.public_key_hash, new_public_key_hash);
+}
+
+#[tokio::test]
+async fn test_update_nonexistent_user() {
+    let pool = setup_test_db().await;
+    let nonexistent_user_id = Uuid::now_v7();
+    
+    let result = update_user(
+        &pool, 
+        nonexistent_user_id, 
+        Some("new_name"), 
+        None, 
+        None
+    ).await;
+    
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_update_user_with_empty_values() {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    
+    create_test_user(&pool, user_id).await.unwrap();
+
+    let original_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    let empty_username = "";
+    let empty_public_key = "";
+    let empty_public_key_hash = "";
+    
+    let result = update_user(
+        &pool, 
+        user_id, 
+        Some(empty_username), 
+        Some(empty_public_key), 
+        Some(empty_public_key_hash)
+    ).await;
+    
+    assert!(result.is_err());
+    
+    let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    assert_eq!(updated_user.username, original_user.username);
+    assert_eq!(updated_user.public_key, original_user.public_key);
+    assert_eq!(updated_user.public_key_hash, original_user.public_key_hash);
+}
+
 pub async fn create_test_user(pool: &SqlitePool, id: Uuid) -> Result<(), Error> {
-    let firstName = rand::random::<FirstName>().to_string();
-    let lastName = rand::thread_rng().gen::<LastName>().to_string();
+    let full_name = rand::random::<FullName>().to_string();
 
     let signing_key = SigningKey::random(&mut OsRng);
     let verifying_key = VerifyingKey::from(&signing_key);  
+
+    let public_key = hex::encode(verifying_key.to_encoded_point(true).as_bytes());
+    let public_key_hash = hex::encode(Sha256::digest(&public_key));
 
     let user = sqlx::query!(
         r#"INSERT INTO users (id, public_key, public_key_hash, username)
          VALUES (?, ?, ?, ?)
          "#,
         id,
-        "public_key",
-        "public_key_hash",
-        format!("{}{}",  firstName, lastName)
+        public_key,
+        public_key_hash,
+        full_name
     )
     .execute(pool)
     .await?;
