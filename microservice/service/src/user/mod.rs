@@ -5,11 +5,11 @@ use db::{
     models::User,
     uuid::{self, Uuid},
 };
+use mockall::automock;
 use shared::{
     errors::AppError,
     models::{RegisterRequest, RegisterResponse, UpdateUserRequest},
 };
-use mockall::automock;
 
 #[automock]
 #[async_trait]
@@ -27,7 +27,7 @@ pub trait UserRepository: Send + Sync {
 
     async fn get_users(&self, limit: Option<i64>) -> Result<Vec<User>, AppError>;
 
-    async fn update_user (
+    async fn update_user(
         &self,
         user_id: Uuid,
         new_username: Option<String>,
@@ -510,7 +510,12 @@ mod tests {
 
         mock_repo
             .expect_update_user()
-            .with(eq(user_id), eq(Some(new_username.to_string())), eq(None), eq(None))
+            .with(
+                eq(user_id),
+                eq(Some(new_username.to_string())),
+                eq(None),
+                eq(None),
+            )
             .times(1)
             .returning(|_, _, _, _| Ok(()));
 
@@ -576,7 +581,7 @@ mod tests {
             .expect_update_user()
             .with(always(), always(), always(), always())
             .times(1)
-            .returning(|_, _,  _, _| {
+            .returning(|_, _, _, _| {
                 Err(AppError::DatabaseError(db::Error::InvalidArgument(
                     "DB error".to_string(),
                 )))

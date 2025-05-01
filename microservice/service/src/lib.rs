@@ -1,5 +1,5 @@
-pub mod user;
 pub mod message;
+pub mod user;
 
 #[cfg(test)]
 mod tests {

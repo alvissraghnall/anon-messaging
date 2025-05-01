@@ -33,3 +33,15 @@ pub struct SignedRequest<T> {
     pub timestamp: i64,
     pub public_key: Option<String>, // Only needed for first request
 }
+
+pub struct CreateMessageRequest {
+    sender_id: Uuid,
+    recipient_id: Uuid,
+    encrypted_content: String,
+    signature: Option<String>,
+    parent_id: Option<i64>,
+}
+
+pub struct CreateMessageResponse {
+    id: Option<i64>
+}

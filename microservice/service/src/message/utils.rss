@@ -1,0 +1,94 @@
+use async_trait::async_trait;
+use db::{
+    Error as SqlxError, SqlitePool, db as database,
+    faker_rand::en_us::names::FullName,
+    models::Message,
+    uuid::{self, Uuid},
+};
+use mockall::automock;
+use shared::{
+    errors::AppError,
+    models::{CreateMessageRequest, CreateMessageResponse},
+};
+
+#[automock]
+#[async_trait]
+pub trait MessageRepository: Send + Sync {
+    async fn insert_message(
+        &self,
+        sender_id: Uuid,
+        recipient_id: Uuid,
+        encrypted_content: &str,
+        signature: Option<String>,
+        parent_id: Option<i64>,
+    ) -> Result<Option<i64>, AppError>;
+
+    async fn get_message_by_id(&self, message_id: i64) -> Result<Option<Message>, AppError>;
+}
+
+#[async_trait]
+impl MessageRepository for SqlitePool {
+    async fn insert_message(
+        &self,
+        sender_id: Uuid,
+        recipient_id: Uuid,
+        encrypted_content: &str,
+        signature: Option<String>,
+        parent_id: Option<i64>,
+    ) -> Result<Option<i64>, AppError> {
+        let message_id = database::create_message(
+            self,
+            sender_id,
+            recipient_id,
+            encrypted_content,
+            signature.as_deref(),
+            parent_id,
+        )
+        .await?;
+
+        Ok(message_id)
+    }
+
+    async fn get_message_by_id(&self, message_id: i64) -> Result<Option<Message>, AppError> {
+        let message = database::get_message(self, message_id).await?;
+        Ok(message)
+    }
+}
+
+#[derive(Clone)]
+pub struct MessageService<R: MessageRepository> {
+    repository: R,
+}
+
+impl<R: MessageRepository> MessageService<R> {
+    pub fn new(repository: R) -> Self {
+        Self { repository }
+    }
+    /*pub async fn register_user(
+        &self,
+        request: RegisterRequest,
+    ) -> Result<RegisterResponse, AppError> {
+        let user_id = uuid::Uuid::now_v7();
+
+        let username = match request.username {
+            Some(name) => name,
+            None => generate_random_username(),
+        };
+
+        let pkeyclone = request.public_key.as_str();
+        let public_key_hash = sha256_hash(pkeyclone)?;
+
+        let user_id = self
+            .repository
+            .insert_user(&public_key_hash, &request.public_key, &username)
+            .await?;
+        Ok(RegisterResponse {
+            user_id: user_id,
+            username: username.to_string(),
+        })
+    }*/
+
+    pub async fn get_message_by_id(&self, message_id: i64) -> Result<Option<Message>, AppError> {
+        self.repository.get_message_by_id(message_id).await
+    }
+}

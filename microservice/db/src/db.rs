@@ -447,7 +447,7 @@ pub async fn get_complete_thread(
 
 pub async fn get_user_threads(
     pool: &SqlitePool,
-    user_id: &str,
+    user_id: Uuid,
     limit: Option<i64>,
 ) -> Result<Vec<Message>, Error> {
     let raw_messages = sqlx::query_as::<_, RawMessage>(
