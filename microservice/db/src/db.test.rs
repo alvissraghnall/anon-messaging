@@ -1,15 +1,15 @@
 use super::*;
-use serial_test::serial;
-use sqlx::migrate::MigrateDatabase;
-use sqlx::Row;
-use std::sync::Once;
-use faker_rand::en_us::names::{FullName};
+use faker_rand::en_us::names::FullName;
 use p256::{
     ecdsa::{SigningKey, VerifyingKey},
     elliptic_curve::rand_core::OsRng,
 };
 use rand::Rng;
+use serial_test::serial;
 use sha2::{Digest, Sha256};
+use sqlx::migrate::MigrateDatabase;
+use sqlx::Row;
+use std::sync::Once;
 use tokio::time::Duration;
 
 static INIT: Once = Once::new();
@@ -109,12 +109,7 @@ async fn test_insert_user() {
     println!("{:?}", result);
     assert!(result.is_ok());
 
-    let user = get_user_by_id(
-        &pool,
-        result.unwrap(),
-    )
-    .await
-    .unwrap();
+    let user = get_user_by_id(&pool, result.unwrap()).await.unwrap();
     assert_eq!(user.id.get_version(), Some(uuid::Version::SortRand));
     assert_eq!(user.public_key_hash, public_key_hash);
     assert_eq!(user.public_key, public_key);
@@ -206,15 +201,17 @@ async fn test_concurrent_user_insertion() {
 #[tokio::test]
 async fn test_get_user_by_pubkey_found() {
     let pool = setup_test_db().await;
-    
+
     let username = "test_user";
     let public_key = "test_public_key";
     let public_key_hash = "test_public_key_hash";
-    
-    insert_user(&pool, public_key_hash, public_key, username).await.unwrap();
-    
+
+    insert_user(&pool, public_key_hash, public_key, username)
+        .await
+        .unwrap();
+
     let result = get_user_by_pubkey(&pool, public_key_hash).await;
-    
+
     assert!(result.is_ok());
     let user = result.unwrap();
     assert_eq!(user.username, username);
@@ -225,27 +222,29 @@ async fn test_get_user_by_pubkey_found() {
 #[tokio::test]
 async fn test_get_user_by_pubkey_not_found() {
     let pool = setup_test_db().await;
-    
+
     let result = get_user_by_pubkey(&pool, "nonexistent_hash").await;
-    
+
     assert!(result.is_err());
-    
+
     assert!(matches!(result.unwrap_err(), Error::RowNotFound));
 }
 
 #[tokio::test]
 async fn test_get_user_by_pubkey_special_characters() {
     let pool = setup_test_db().await;
-    
+
     let user_id = Uuid::now_v7();
     let username = "special_chars_user";
     let public_key = "special_public_key";
     let public_key_hash = "Hash!@#$%^&*()_+-=[]{}|;':,./<>?";
-    
-    insert_user(&pool, public_key_hash, public_key, username).await.unwrap();
-    
+
+    insert_user(&pool, public_key_hash, public_key, username)
+        .await
+        .unwrap();
+
     let result = get_user_by_pubkey(&pool, public_key_hash).await;
-    
+
     assert!(result.is_ok());
     let user = result.unwrap();
     assert_eq!(user.username, username);
@@ -257,15 +256,15 @@ async fn test_get_user_by_pubkey_special_characters() {
 async fn test_fetch_public_key_hash_success() {
     let pool = setup_test_db().await;
     let user_id = Uuid::now_v7();
-    
+
     create_test_user(&pool, user_id).await.unwrap();
-    
+
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     let result = fetch_public_key_hash(&pool, user_id).await;
-    
+
     assert!(result.is_ok());
-    
+
     let public_key_hash = result.unwrap();
     assert_eq!(public_key_hash, original_user.public_key_hash);
 }
@@ -273,16 +272,15 @@ async fn test_fetch_public_key_hash_success() {
 #[tokio::test]
 async fn test_fetch_public_key_hash_user_not_found() {
     let pool = setup_test_db().await;
-    
+
     let nonexistent_user_id = Uuid::now_v7();
-    
+
     let result = fetch_public_key_hash(&pool, nonexistent_user_id).await;
-    
+
     assert!(result.is_err());
-    
+
     match result {
-        Err(sqlx::Error::RowNotFound) => {
-        }
+        Err(sqlx::Error::RowNotFound) => {}
         _ => {
             panic!("Expected RowNotFound error, got: {:?}", result);
         }
@@ -316,7 +314,7 @@ async fn test_create_message() -> Result<(), Error> {
     assert!(message_id.is_some());
     assert!(message_id.unwrap() > 0);
 
-     Ok(())
+    Ok(())
 }
 
 #[tokio::test]
@@ -604,27 +602,13 @@ async fn test_get_conversation_bidirectional() -> Result<(), Error> {
     create_test_user(&pool, user1_id).await;
     create_test_user(&pool, user2_id).await;
 
-    create_message(
-        &pool,
-        user1_id,
-        user2_id,
-        "From user1 to user2",
-        None,
-        None,
-    )
-    .await?
-    .unwrap();
+    create_message(&pool, user1_id, user2_id, "From user1 to user2", None, None)
+        .await?
+        .unwrap();
 
-    create_message(
-        &pool,
-        user2_id,
-        user1_id,
-        "From user2 to user1",
-        None,
-        None,
-    )
-    .await?
-    .unwrap();
+    create_message(&pool, user2_id, user1_id, "From user2 to user1", None, None)
+        .await?
+        .unwrap();
 
     let messages1 = get_conversation(&pool, user1_id, user2_id, None).await?;
 
@@ -691,16 +675,9 @@ async fn test_get_unread_messages_mixed() -> Result<(), Error> {
     .await?
     .unwrap();
 
-    let read_msg_id = create_message(
-        &pool,
-        sender1_id,
-        recipient_id,
-        "Read message",
-        None,
-        None,
-    )
-    .await?
-    .unwrap();
+    let read_msg_id = create_message(&pool, sender1_id, recipient_id, "Read message", None, None)
+        .await?
+        .unwrap();
 
     mark_message_read(&pool, read_msg_id).await?;
 
@@ -799,29 +776,15 @@ async fn test_get_thread_replies_with_replies() -> Result<(), Error> {
         .await?
         .unwrap();
 
-    let reply1_id = create_message(
-        &pool,
-        user2_id,
-        user1_id,
-        "Reply 1",
-        None,
-        Some(parent_id),
-    )
-    .await?
-    .unwrap();
+    let reply1_id = create_message(&pool, user2_id, user1_id, "Reply 1", None, Some(parent_id))
+        .await?
+        .unwrap();
 
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
-    let reply2_id = create_message(
-        &pool,
-        user1_id,
-        user2_id,
-        "Reply 2",
-        None,
-        Some(parent_id),
-    )
-    .await?
-    .unwrap();
+    let reply2_id = create_message(&pool, user1_id, user2_id, "Reply 2", None, Some(parent_id))
+        .await?
+        .unwrap();
 
     let other_parent_id = create_message(&pool, user1_id, user2_id, "Another parent", None, None)
         .await?
@@ -922,14 +885,7 @@ async fn test_store_and_validate_refresh_token() -> Result<(), Error> {
     let token_hash = "test_token_hash";
     let expires_at = Utc::now().timestamp() + 3600;
 
-    store_refresh_token(
-        &pool,
-        user_id,
-        token_hash,
-        expires_at,
-        Some("Test Device"),
-    )
-    .await?;
+    store_refresh_token(&pool, user_id, token_hash, expires_at, Some("Test Device")).await?;
 
     let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
     assert!(is_valid);
@@ -952,14 +908,7 @@ async fn test_expired_token_validation() -> Result<(), Error> {
     let token_hash = "expired_token_hash";
     let expires_at = Utc::now().timestamp() - 3600;
 
-    store_refresh_token(
-        &pool,
-        user_id,
-        token_hash,
-        expires_at,
-        None,
-    )
-    .await?;
+    store_refresh_token(&pool, user_id, token_hash, expires_at, None).await?;
 
     let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
     assert!(!is_valid, "Expired token should not validate");
@@ -976,14 +925,7 @@ async fn test_revoke_refresh_token() -> Result<(), Error> {
     let token_hash = "token_to_revoke";
     let expires_at = Utc::now().timestamp() + 3600;
 
-    store_refresh_token(
-        &pool,
-        user_id,
-        token_hash,
-        expires_at,
-        None,
-    )
-    .await?;
+    store_refresh_token(&pool, user_id, token_hash, expires_at, None).await?;
 
     let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
     assert!(is_valid);
@@ -1055,28 +997,11 @@ async fn test_token_uniqueness() -> Result<(), Error> {
     let token_hash = "unique_hash";
     let expires_at = Utc::now().timestamp() + 3600;
 
-    store_refresh_token(
-        &pool,
-        user_id,
-        token_hash,
-        expires_at,
-        None,
-    )
-    .await?;
+    store_refresh_token(&pool, user_id, token_hash, expires_at, None).await?;
 
-    let result = store_refresh_token(
-        &pool,
-        user_id,
-        token_hash,
-        expires_at,
-        None,
-    )
-    .await;
+    let result = store_refresh_token(&pool, user_id, token_hash, expires_at, None).await;
 
-    assert!(
-        result.is_err(),
-        "Should not allow duplicate token hashes"
-    );
+    assert!(result.is_err(), "Should not allow duplicate token hashes");
 
     Ok(())
 }
@@ -1085,21 +1010,14 @@ async fn test_token_uniqueness() -> Result<(), Error> {
 #[serial]
 async fn test_revoked_token_cannot_validate() -> Result<(), Error> {
     let pool = setup_test_db().await;
-    
+
     let user_id = Uuid::now_v7();
     create_test_user(&pool, user_id).await?;
-    
+
     let token_hash = "revocable_token_hash";
     let expires_at = Utc::now().timestamp() + 3600;
 
-    store_refresh_token(
-        &pool,
-        user_id,
-        token_hash,
-        expires_at,
-        Some("Test Device"),
-    )
-    .await?;
+    store_refresh_token(&pool, user_id, token_hash, expires_at, Some("Test Device")).await?;
 
     let is_valid = validate_refresh_token(&pool, user_id, token_hash).await?;
     assert!(is_valid, "Token should validate before revocation");
@@ -1116,7 +1034,7 @@ async fn test_revoked_token_cannot_validate() -> Result<(), Error> {
     )
     .fetch_optional(&pool)
     .await?;
-    
+
     assert_eq!(revoked.unwrap().reason, Some("test revocation".to_string()));
 
     Ok(())
@@ -1126,21 +1044,21 @@ async fn test_revoked_token_cannot_validate() -> Result<(), Error> {
 async fn test_update_user_no_changes() {
     let pool = setup_test_db().await;
     let user_id = Uuid::now_v7();
-    
+
     create_test_user(&pool, user_id).await.unwrap();
-    
+
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     let result = update_user(&pool, user_id, None, None, None).await;
-    
+
     assert!(result.is_ok());
-    
+
     let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     assert_eq!(updated_user.username, original_user.username);
     assert_eq!(updated_user.public_key, original_user.public_key);
     assert_eq!(updated_user.public_key_hash, original_user.public_key_hash);
-    
+
     assert!(updated_user.updated_at > original_user.updated_at);
 }
 
@@ -1148,23 +1066,23 @@ async fn test_update_user_no_changes() {
 async fn test_update_user_username() {
     let pool = setup_test_db().await;
     let user_id = Uuid::now_v7();
-    
+
     create_test_user(&pool, user_id).await.unwrap();
-    
+
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     let new_username = "updated_username";
     let result = update_user(&pool, user_id, Some(new_username), None, None).await;
-    
+
     assert!(result.is_ok());
-    
+
     let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     assert_eq!(updated_user.username, new_username);
-    
+
     assert_eq!(updated_user.public_key, original_user.public_key);
     assert_eq!(updated_user.public_key_hash, original_user.public_key_hash);
-    
+
     assert!(updated_user.updated_at > original_user.updated_at);
 }
 
@@ -1172,30 +1090,31 @@ async fn test_update_user_username() {
 async fn test_update_user_public_key() {
     let pool = setup_test_db().await;
     let user_id = Uuid::now_v7();
-    
+
     create_test_user(&pool, user_id).await.unwrap();
-    
+
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     let new_public_key = "updated_public_key";
     let new_public_key_hash = "updated_public_key_hash";
     let result = update_user(
-        &pool, 
-        user_id, 
-        None, 
-        Some(new_public_key), 
-        Some(new_public_key_hash)
-    ).await;
-    
+        &pool,
+        user_id,
+        None,
+        Some(new_public_key),
+        Some(new_public_key_hash),
+    )
+    .await;
+
     assert!(result.is_ok());
-    
+
     let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     assert_eq!(updated_user.public_key, new_public_key);
     assert_eq!(updated_user.public_key_hash, new_public_key_hash);
-    
+
     assert_eq!(updated_user.username, original_user.username);
-    
+
     assert!(updated_user.updated_at > original_user.updated_at);
 }
 
@@ -1203,25 +1122,26 @@ async fn test_update_user_public_key() {
 async fn test_update_user_all_fields() {
     let pool = setup_test_db().await;
     let user_id = Uuid::now_v7();
-    
+
     create_test_user(&pool, user_id).await.unwrap();
-    
+
     let new_username = "completely_updated_user";
     let new_public_key = "completely_updated_public_key";
     let new_public_key_hash = "completely_updated_public_key_hash";
-    
+
     let result = update_user(
-        &pool, 
-        user_id, 
-        Some(new_username), 
-        Some(new_public_key), 
-        Some(new_public_key_hash)
-    ).await;
-    
+        &pool,
+        user_id,
+        Some(new_username),
+        Some(new_public_key),
+        Some(new_public_key_hash),
+    )
+    .await;
+
     assert!(result.is_ok());
-    
+
     let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     assert_eq!(updated_user.username, new_username);
     assert_eq!(updated_user.public_key, new_public_key);
     assert_eq!(updated_user.public_key_hash, new_public_key_hash);
@@ -1231,15 +1151,9 @@ async fn test_update_user_all_fields() {
 async fn test_update_nonexistent_user() {
     let pool = setup_test_db().await;
     let nonexistent_user_id = Uuid::now_v7();
-    
-    let result = update_user(
-        &pool, 
-        nonexistent_user_id, 
-        Some("new_name"), 
-        None, 
-        None
-    ).await;
-    
+
+    let result = update_user(&pool, nonexistent_user_id, Some("new_name"), None, None).await;
+
     assert!(result.is_err());
 }
 
@@ -1247,37 +1161,141 @@ async fn test_update_nonexistent_user() {
 async fn test_update_user_with_empty_values() {
     let pool = setup_test_db().await;
     let user_id = Uuid::now_v7();
-    
+
     create_test_user(&pool, user_id).await.unwrap();
 
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     let empty_username = "";
     let empty_public_key = "";
     let empty_public_key_hash = "";
-    
+
     let result = update_user(
-        &pool, 
-        user_id, 
-        Some(empty_username), 
-        Some(empty_public_key), 
-        Some(empty_public_key_hash)
-    ).await;
-    
+        &pool,
+        user_id,
+        Some(empty_username),
+        Some(empty_public_key),
+        Some(empty_public_key_hash),
+    )
+    .await;
+
     assert!(result.is_err());
-    
+
     let updated_user = get_user_by_id(&pool, user_id).await.unwrap();
-    
+
     assert_eq!(updated_user.username, original_user.username);
     assert_eq!(updated_user.public_key, original_user.public_key);
     assert_eq!(updated_user.public_key_hash, original_user.public_key_hash);
+}
+
+#[tokio::test]
+async fn test_user_with_no_messages_returns_empty() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    create_test_user(&pool, user_id).await?;
+
+    let threads = get_user_threads(&pool, user_id, Some(10)).await?;
+    assert!(threads.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_user_with_single_thread() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = setup_test_db().await;
+    let user1 = Uuid::now_v7();
+    let user2 = Uuid::now_v7();
+    create_test_user(&pool, user1).await?;
+    create_test_user(&pool, user2).await?;
+
+    let parent_id = create_message(&pool, user1, user2, "Hello", None, None)
+        .await?
+        .unwrap();
+
+    create_test_message(&pool, user2, user1, "Hi!", "sig2", Some(parent_id), false).await?;
+
+    let threads = get_user_threads(&pool, user1, Some(10)).await?;
+    assert_eq!(threads.len(), 1);
+    assert_eq!(threads[0].id, parent_id);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_user_with_multiple_threads() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = setup_test_db().await;
+    let user1 = Uuid::now_v7();
+    let user2 = Uuid::now_v7();
+    create_test_user(&pool, user1).await?;
+    create_test_user(&pool, user2).await?;
+
+    for i in 0..3 {
+        let parent_id = create_message(&pool, user1, user2, &format!("Msg {i}"), None, None)
+            .await?
+            .unwrap();
+        create_test_message(&pool, user2, user1, "Reply", "sig", Some(parent_id), false).await?;
+    }
+
+    let threads = get_user_threads(&pool, user1, Some(10)).await?;
+    assert_eq!(threads.len(), 3);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_limit_is_respected() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = setup_test_db().await;
+    let user1 = Uuid::now_v7();
+    let user2 = Uuid::now_v7();
+    create_test_user(&pool, user1).await?;
+    create_test_user(&pool, user2).await?;
+
+    for _ in 0..5 {
+        let parent_id = create_message(&pool, user1, user2, "Thread start", None, None)
+            .await?
+            .unwrap();
+        create_test_message(&pool, user2, user1, "Reply", "sig", Some(parent_id), false).await?;
+    }
+
+    let threads = get_user_threads(&pool, user1, Some(3)).await?;
+    assert_eq!(threads.len(), 3);
+
+    Ok(())
+}
+
+pub async fn create_test_message(
+    pool: &SqlitePool,
+    sender_id: Uuid,
+    recipient_id: Uuid,
+    content: &str,
+    signature: &str,
+    parent_id: Option<i64>,
+    is_read: bool,
+) -> Result<(), sqlx::Error> {
+    let now = Utc::now().timestamp();
+    sqlx::query!(
+        r#"
+        INSERT INTO messages (sender_id, recipient_id, encrypted_content, signature, parent_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        "#,
+        sender_id,
+        recipient_id,
+        content,
+        signature,
+        parent_id,
+        now,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 pub async fn create_test_user(pool: &SqlitePool, id: Uuid) -> Result<(), Error> {
     let full_name = rand::random::<FullName>().to_string();
 
     let signing_key = SigningKey::random(&mut OsRng);
-    let verifying_key = VerifyingKey::from(&signing_key);  
+    let verifying_key = VerifyingKey::from(&signing_key);
 
     let public_key = hex::encode(verifying_key.to_encoded_point(true).as_bytes());
     let public_key_hash = hex::encode(Sha256::digest(&public_key));

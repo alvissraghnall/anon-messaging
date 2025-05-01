@@ -162,22 +162,28 @@ pub async fn update_user(
 
     if let Some(username) = new_username {
         if username.is_empty() {
-            return Err(Error::InvalidArgument("Username cannot be empty".to_string()));
+            return Err(Error::InvalidArgument(
+                "Username cannot be empty".to_string(),
+            ));
         }
     }
-    
+
     if let Some(public_key) = new_public_key {
         if public_key.is_empty() {
-            return Err(Error::InvalidArgument("Public Key cannot be empty".to_string()));
+            return Err(Error::InvalidArgument(
+                "Public Key cannot be empty".to_string(),
+            ));
         }
     }
-    
+
     if let Some(public_key_hash) = new_public_key_hash {
         if public_key_hash.is_empty() {
-            return Err(Error::InvalidArgument("Public key hash cannot be empty".to_string()));
+            return Err(Error::InvalidArgument(
+                "Public key hash cannot be empty".to_string(),
+            ));
         }
     }
-    
+
     let username = new_username.unwrap_or(&current_user.username);
     let public_key = new_public_key.unwrap_or(&current_user.public_key);
     let public_key_hash = new_public_key_hash.unwrap_or(&current_user.public_key_hash);
@@ -453,8 +459,8 @@ pub async fn get_user_threads(
     let raw_messages = sqlx::query_as::<_, RawMessage>(
         r#"
         SELECT DISTINCT m.id, 
-                m.sender_id AS "m.sender_id: uuid::Uuid", 
-                m.recipient_id AS "m.recipient_id: uuid::Uuid", 
+                m.sender_id, 
+                m.recipient_id, 
                 m.encrypted_content, 
                 m.signature, m.parent_id, m.created_at, m.is_read
         FROM messages m
