@@ -204,6 +204,92 @@ async fn test_concurrent_user_insertion() {
 }
 
 #[tokio::test]
+async fn test_get_user_by_pubkey_found() {
+    let pool = setup_test_db().await;
+    
+    let username = "test_user";
+    let public_key = "test_public_key";
+    let public_key_hash = "test_public_key_hash";
+    
+    insert_user(&pool, public_key_hash, public_key, username).await.unwrap();
+    
+    let result = get_user_by_pubkey(&pool, public_key_hash).await;
+    
+    assert!(result.is_ok());
+    let user = result.unwrap();
+    assert_eq!(user.username, username);
+    assert_eq!(user.public_key, public_key);
+    assert_eq!(user.public_key_hash, public_key_hash);
+}
+
+#[tokio::test]
+async fn test_get_user_by_pubkey_not_found() {
+    let pool = setup_test_db().await;
+    
+    let result = get_user_by_pubkey(&pool, "nonexistent_hash").await;
+    
+    assert!(result.is_err());
+    
+    assert!(matches!(result.unwrap_err(), Error::RowNotFound));
+}
+
+#[tokio::test]
+async fn test_get_user_by_pubkey_special_characters() {
+    let pool = setup_test_db().await;
+    
+    let user_id = Uuid::now_v7();
+    let username = "special_chars_user";
+    let public_key = "special_public_key";
+    let public_key_hash = "Hash!@#$%^&*()_+-=[]{}|;':,./<>?";
+    
+    insert_user(&pool, public_key_hash, public_key, username).await.unwrap();
+    
+    let result = get_user_by_pubkey(&pool, public_key_hash).await;
+    
+    assert!(result.is_ok());
+    let user = result.unwrap();
+    assert_eq!(user.username, username);
+    assert_eq!(user.public_key_hash, public_key_hash);
+    assert_eq!(user.public_key, public_key);
+}
+
+#[tokio::test]
+async fn test_fetch_public_key_hash_success() {
+    let pool = setup_test_db().await;
+    let user_id = Uuid::now_v7();
+    
+    create_test_user(&pool, user_id).await.unwrap();
+    
+    let original_user = get_user_by_id(&pool, user_id).await.unwrap();
+    
+    let result = fetch_public_key_hash(&pool, user_id).await;
+    
+    assert!(result.is_ok());
+    
+    let public_key_hash = result.unwrap();
+    assert_eq!(public_key_hash, original_user.public_key_hash);
+}
+
+#[tokio::test]
+async fn test_fetch_public_key_hash_user_not_found() {
+    let pool = setup_test_db().await;
+    
+    let nonexistent_user_id = Uuid::now_v7();
+    
+    let result = fetch_public_key_hash(&pool, nonexistent_user_id).await;
+    
+    assert!(result.is_err());
+    
+    match result {
+        Err(sqlx::Error::RowNotFound) => {
+        }
+        _ => {
+            panic!("Expected RowNotFound error, got: {:?}", result);
+        }
+    }
+}
+
+#[tokio::test]
 async fn test_create_message() -> Result<(), Error> {
     let pool = setup_test_db().await;
 

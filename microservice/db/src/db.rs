@@ -65,6 +65,25 @@ pub async fn get_user_by_id(pool: &SqlitePool, user_id: Uuid) -> Result<User, Er
     Ok(user)
 }
 
+pub async fn get_user_by_pubkey(pool: &SqlitePool, pubkey_hash: &str) -> Result<User, Error> {
+    let user = sqlx::query_as!(
+        User,
+        r#"SELECT 
+            id as "id: uuid::Uuid", 
+            public_key, 
+            public_key_hash, 
+            username, 
+            created_at, 
+            last_login, 
+            updated_at
+         FROM users WHERE public_key_hash = ?"#,
+        pubkey_hash
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(user)
+}
+
 pub async fn get_users(pool: &SqlitePool, limit: Option<i64>) -> Result<Vec<User>, Error> {
     let users = sqlx::query_as::<_, User>(
         r#"
@@ -113,7 +132,7 @@ pub async fn get_users(pool: &SqlitePool, limit: Option<i64>) -> Result<Vec<User
 //     Ok(())
 // }
 
-async fn fetch_public_key_hash(
+pub async fn fetch_public_key_hash(
     pool: &sqlx::SqlitePool,
     user_id: Uuid,
 ) -> Result<String, sqlx::Error> {
@@ -149,14 +168,13 @@ pub async fn update_user(
     
     if let Some(public_key) = new_public_key {
         if public_key.is_empty() {
-            return Err(Error::InvalidArgument("Username cannot be empty".to_string()));
-
+            return Err(Error::InvalidArgument("Public Key cannot be empty".to_string()));
         }
     }
     
     if let Some(public_key_hash) = new_public_key_hash {
         if public_key_hash.is_empty() {
-            return Err(Error::InvalidArgument("Username cannot be empty".to_string()));
+            return Err(Error::InvalidArgument("Public key hash cannot be empty".to_string()));
         }
     }
     

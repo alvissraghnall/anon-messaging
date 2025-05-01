@@ -10,7 +10,7 @@ use sqlx::{
 };
 
 #[serde_as]
-#[derive(Debug, FromRow, Serialize, Deserialize)]
+#[derive(Debug, FromRow, Serialize, Deserialize, Clone)]
 pub struct User {
     #[serde(with = "uuid::serde::simple")]
     pub id: Uuid,

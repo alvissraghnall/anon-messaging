@@ -14,6 +14,10 @@ db = { version = "0.1.0", path = "../db" }
 aes-gcm = "0.10.3"
 pbkdf2 = { version = "0.12.2", features = ["simple"] }
 base64 = "0.22.1"
+validator = { version = "0.20.0", features = ["derive"] }
+thiserror = "2.0.12"
+actix-web = "4.10.2"
+sqlx = "0.8.5"
 
 [dev-dependencies]
 generic-array = "0.14"
