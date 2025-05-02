@@ -8,9 +8,10 @@ use sqlx::{
     },
     FromRow,
 };
+use utoipa::ToSchema;
 
 #[serde_as]
-#[derive(Debug, FromRow, Serialize, Deserialize, Clone)]
+#[derive(Debug, FromRow, Serialize, Deserialize, Clone, ToSchema)]
 pub struct User {
     #[serde(with = "uuid::serde::simple")]
     pub id: Uuid,
@@ -54,7 +55,7 @@ impl RawMessage {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
+#[derive(Debug, Serialize, Deserialize, FromRow, Clone, ToSchema)]
 pub struct Message {
     pub id: i64,
     #[serde(with = "uuid::serde::simple")]

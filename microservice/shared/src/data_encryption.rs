@@ -1,6 +1,6 @@
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
-    Aes256Gcm, Nonce, AeadCore
+    AeadCore, Aes256Gcm, Nonce,
 };
 use base64;
 
@@ -10,12 +10,10 @@ pub fn encrypt_at_rest(data: &[u8], server_key: &[u8]) -> Vec<u8> {
     let cipher = Aes256Gcm::new_from_slice(server_key).expect("Invalid key length");
 
     // Generate a random nonce (12 bytes for AES-GCM)
-	let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
 
     // Encrypt the data
-    let encrypted_data = cipher
-        .encrypt(&nonce, data)
-        .expect("Encryption failed");
+    let encrypted_data = cipher.encrypt(&nonce, data).expect("Encryption failed");
 
     // Combine the nonce and encrypted data into a single vector
     let mut result = nonce.to_vec();

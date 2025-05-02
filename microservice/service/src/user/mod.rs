@@ -140,11 +140,15 @@ impl<R: UserRepository> UserService<R> {
         self.repository.get_users(limit).await
     }
 
-    async fn fetch_public_key_hash(&self, user_id: Uuid) -> Result<String, AppError> {
+    pub async fn fetch_public_key_hash(&self, user_id: Uuid) -> Result<String, AppError> {
         self.repository.fetch_public_key_hash(user_id).await
     }
 
-    async fn update_user(&self, user_id: Uuid, request: UpdateUserRequest) -> Result<(), AppError> {
+    pub async fn update_user(
+        &self,
+        user_id: Uuid,
+        request: UpdateUserRequest,
+    ) -> Result<(), AppError> {
         let mut public_key_hash: Option<String> = None;
         if let Some(ref public_key) = request.new_public_key {
             public_key_hash = Some(sha256_hash(&public_key)?);

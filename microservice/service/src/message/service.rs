@@ -363,10 +363,7 @@ mod tests {
         let user1_id = Uuid::now_v7();
         let user2_id = Uuid::now_v7();
         let limit = Some(5);
-        let expected_messages = vec![
-            create_test_message(1),
-            create_test_message(2),
-        ];
+        let expected_messages = vec![create_test_message(1), create_test_message(2)];
 
         mock_repo
             .expect_get_conversation()
@@ -440,10 +437,7 @@ mod tests {
         let parent_id = 1;
         let limit = Some(2);
         let offset = Some(2);
-        let expected_replies = vec![
-            create_test_message(3),
-            create_test_message(4),
-        ];
+        let expected_replies = vec![create_test_message(3), create_test_message(4)];
 
         mock_repo
             .expect_get_thread_replies()
@@ -503,7 +497,7 @@ mod tests {
         let thread_root_id = 1;
         let limit = Some(50);
         let mut expected_thread = Vec::new();
-        
+
         for i in 1..=50 {
             expected_thread.push(create_test_message(i));
         }

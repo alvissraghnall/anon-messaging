@@ -5,12 +5,16 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.9.0"
+async-trait = "0.1.88"
 base64 = "0.22.1"
 db = { version = "0.1.0", path = "../db" }
+mockall = "0.13.1"
 serde = "1.0.217"
 serde_json = "1.0.138"
+service = { version = "0.1.0", path = "../service" }
 shared = { version = "0.1.0", path = "../shared" }
 sqlx = "0.8.3"
+utoipa = { version = "5.3.1", features = ["uuid", "actix_extras", "chrono"] }
 
 [dev-dependencies]
 actix-http = "3.9.0"
