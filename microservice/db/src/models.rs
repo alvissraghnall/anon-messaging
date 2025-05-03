@@ -1,3 +1,6 @@
+use crate::hyphenated_uuid::hyphenated_uuid;
+use crate::public_key::PublicKey;
+use crate::public_key_hash::PublicKeyHash;
 use crate::unix_timestamp::unix_timestamp;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, TimestampSecondsWithFrac};
@@ -13,11 +16,11 @@ use utoipa::ToSchema;
 #[serde_as]
 #[derive(Debug, FromRow, Serialize, Deserialize, Clone, ToSchema)]
 pub struct User {
-    #[serde(with = "uuid::serde::simple")]
+    #[serde(with = "hyphenated_uuid")]
     pub id: Uuid,
     pub username: String,
-    pub public_key: String, // Base64-encoded SPKI format
-    pub public_key_hash: String,
+    pub public_key: PublicKey,
+    pub public_key_hash: PublicKeyHash,
     #[serde_as(as = "TimestampSecondsWithFrac<String>")]
     pub created_at: NaiveDateTime,
     #[serde_as(as = "Option<TimestampSecondsWithFrac<String>>")]

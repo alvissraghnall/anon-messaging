@@ -1,10 +1,4 @@
 use super::*;
-use crate::{public_key::PublicKey, public_key_hash::PublicKeyHash};
-use base64::{
-    alphabet,
-    engine::{self, general_purpose},
-    Engine as _,
-};
 use faker_rand::en_us::names::FullName;
 use p256::{
     ecdsa::{SigningKey, VerifyingKey},
@@ -15,8 +9,10 @@ use serial_test::serial;
 use sha2::{Digest, Sha256};
 use sqlx::migrate::MigrateDatabase;
 use sqlx::Row;
+use crate::{public_key_hash::PublicKeyHash, public_key::PublicKey};
 use std::sync::Once;
 use tokio::time::Duration;
+use base64::{Engine as _, engine::{self, general_purpose}, alphabet};
 
 static INIT: Once = Once::new();
 static CUSTOM_ENGINE: engine::GeneralPurpose =
@@ -47,17 +43,17 @@ async fn setup_test_db() -> SqlitePool {
         DROP TABLE IF EXISTS users;
 
         CREATE TABLE users (
-            id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 16),
+            id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 6),
             username TEXT NOT NULL UNIQUE CHECK (length(username) >= 3 AND length(username) <= 50),
-            public_key TEXT NOT NULL CHECK (
+            public_key TEXT NOT NULL UNIQUE CHECK (
                 length(public_key) % 4 = 0 AND
-                public_key GLOB '[A-Za-z0-9_-]*' AND
-                public_key NOT LIKE '%==%'
+                public_key GLOB '[A-Za-z0-9+/]*' 
+                public_key LIKE '%='
             ),
             public_key_hash TEXT NOT NULL UNIQUE CHECK (
-                length(public_key_hash) = 43 AND
-                public_key_hash GLOB '[A-Za-z0-9_-]*' AND
-                public_key_hash NOT LIKE '%==%'
+                length(public_key_hash) = 44 AND
+                public_key_hash GLOB '[A-Za-z0-9+/]*' AND
+                public_key_hash LIKE '%='
             ),
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -137,9 +133,7 @@ async fn test_insert_user() {
     println!("{:?}", result);
     assert!(result.is_ok());
 
-    let id = result.unwrap();
-
-    let user = get_user_by_id(&pool, id).await.unwrap();
+    let user = get_user_by_id(&pool, result.unwrap()).await.unwrap();
     assert_eq!(user.id.get_version(), Some(uuid::Version::SortRand));
     assert_eq!(user.public_key_hash, public_key_hash);
     assert_eq!(user.public_key, public_key);
@@ -234,7 +228,7 @@ async fn test_get_user_by_pubkey_found() {
     let username = "test_user";
     let (public_key, public_key_hash) = generate_key().await;
 
-    let user = insert_user(&pool, &public_key_hash, &public_key, username)
+    insert_user(&pool, &public_key_hash, &public_key, username)
         .await
         .unwrap();
 
@@ -1076,8 +1070,6 @@ async fn test_update_user_no_changes() {
 
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(700)).await;
-
     let result = update_user(&pool, user_id, None, None, None).await;
 
     assert!(result.is_ok());
@@ -1100,8 +1092,6 @@ async fn test_update_user_username() {
 
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
-
     let new_username = "updated_username";
     let result = update_user(&pool, user_id, Some(new_username), None, None).await;
 
@@ -1114,7 +1104,6 @@ async fn test_update_user_username() {
     assert_eq!(updated_user.public_key, original_user.public_key);
     assert_eq!(updated_user.public_key_hash, original_user.public_key_hash);
 
-    println!("{} {}", updated_user.updated_at, original_user.updated_at);
     assert!(updated_user.updated_at > original_user.updated_at);
 }
 
@@ -1126,8 +1115,6 @@ async fn test_update_user_public_key() {
     create_test_user(&pool, user_id).await.unwrap();
 
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
-
-    tokio::time::sleep(tokio::time::Duration::from_millis(900)).await;
 
     let (new_public_key, new_public_key_hash) = generate_key().await;
 
@@ -1201,7 +1188,14 @@ async fn test_update_user_with_empty_values() {
 
     let empty_username = "";
 
-    let result = update_user(&pool, user_id, Some(empty_username), None, None).await;
+    let result = update_user(
+        &pool,
+        user_id,
+        Some(empty_username),
+        None,
+        None,
+    )
+    .await;
 
     assert!(result.is_err());
 
@@ -1323,7 +1317,7 @@ pub async fn create_test_user(pool: &SqlitePool, id: Uuid) -> Result<(), Error> 
 
     let b64_key = CUSTOM_ENGINE.encode(verifying_key.to_encoded_point(true).as_bytes());
     let public_key = PublicKey::new(b64_key).unwrap();
-
+ 
     let public_key_hash = public_key.to_hash().unwrap();
 
     let user = sqlx::query(
@@ -1341,7 +1335,7 @@ pub async fn create_test_user(pool: &SqlitePool, id: Uuid) -> Result<(), Error> 
     Ok(())
 }
 
-pub async fn generate_key() -> (PublicKey, PublicKeyHash) {
+pub async fn generate_key () -> (PublicKey, PublicKeyHash) {
     let signing_key = SigningKey::random(&mut OsRng);
     let verifying_key = VerifyingKey::from(&signing_key);
 

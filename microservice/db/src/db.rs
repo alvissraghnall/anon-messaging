@@ -1,7 +1,9 @@
 use crate::models::{Message, RawMessage, User};
+use crate::{public_key::PublicKey, public_key_hash::PublicKeyHash};
 use dotenv::dotenv;
 use serde::{Deserialize, Serialize};
 use sqlx::types::chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use sqlx::{sqlite::SqliteArguments, Arguments, Row};
 use sqlx::{Error, SqlitePool};
 use std::env;
 use std::path::PathBuf;
@@ -24,21 +26,32 @@ pub async fn create_db_pool() -> Result<SqlitePool, Error> {
 
 pub async fn insert_user(
     pool: &SqlitePool,
-    public_key_hash: &str,
-    public_key: &str,
+    public_key_hash: &PublicKeyHash,
+    public_key: &PublicKey,
     username: &str,
 ) -> Result<Uuid, Error> {
     let id = Uuid::now_v7();
-    let id_as_str = id.to_string();
+    let id_str = id.to_string();
+    println!("{} {} {}", id, id.to_string().len(), id.as_bytes().len());
+    println!(
+        "{} {} {}",
+        public_key_hash.as_str(),
+        public_key_hash.as_str().to_string().len(),
+        public_key_hash.as_str().as_bytes().len()
+    );
 
-    let user_id = sqlx::query!(
-        r#"INSERT INTO users (id, public_key, public_key_hash, username)  
-         VALUES (?, ?, ?, ?)
+    let mut args = SqliteArguments::default();
+
+    args.add(id);
+    args.add(public_key);
+    args.add(public_key_hash);
+    args.add(username);
+
+    sqlx::query_with(
+        r#"INSERT INTO users (id, public_key, public_key_hash, username)
+         VALUES ($1, $2, $3, $4)
          "#,
-        id,
-        public_key,
-        public_key_hash,
-        username
+        args,
     )
     .execute(pool)
     .await?;
@@ -47,37 +60,46 @@ pub async fn insert_user(
 }
 
 pub async fn get_user_by_id(pool: &SqlitePool, user_id: Uuid) -> Result<User, Error> {
-    let user = sqlx::query_as!(
-        User,
+    let mut args = SqliteArguments::default();
+
+    args.add(user_id);
+
+    let user = sqlx::query_as_with::<_, User, _>(
         r#"SELECT 
-            id as "id: uuid::Uuid", 
+            id,
             public_key, 
             public_key_hash, 
             username, 
             created_at, 
             last_login, 
             updated_at
-         FROM users WHERE id = ?"#,
-        user_id
+         FROM users WHERE id = $1"#,
+        args,
     )
     .fetch_one(pool)
     .await?;
     Ok(user)
 }
 
-pub async fn get_user_by_pubkey(pool: &SqlitePool, pubkey_hash: &str) -> Result<User, Error> {
-    let user = sqlx::query_as!(
-        User,
+pub async fn get_user_by_pubkey(
+    pool: &SqlitePool,
+    pubkey_hash: &PublicKeyHash,
+) -> Result<User, Error> {
+    let mut args = SqliteArguments::default();
+
+    args.add(pubkey_hash);
+
+    let user = sqlx::query_as_with::<_, User, _>(
         r#"SELECT 
-            id as "id: uuid::Uuid", 
+            id, 
             public_key, 
             public_key_hash, 
             username, 
             created_at, 
             last_login, 
             updated_at
-         FROM users WHERE public_key_hash = ?"#,
-        pubkey_hash
+         FROM users WHERE public_key_hash = $1"#,
+        args,
     )
     .fetch_one(pool)
     .await?;
@@ -87,7 +109,7 @@ pub async fn get_user_by_pubkey(pool: &SqlitePool, pubkey_hash: &str) -> Result<
 pub async fn get_users(pool: &SqlitePool, limit: Option<i64>) -> Result<Vec<User>, Error> {
     let users = sqlx::query_as::<_, User>(
         r#"
-            SELECT id as "id: uuid::Uuid",
+            SELECT id,
                     public_key_hash,
                     public_key,
                     username,
@@ -95,7 +117,7 @@ pub async fn get_users(pool: &SqlitePool, limit: Option<i64>) -> Result<Vec<User
                     last_login,
                     updated_at
             FROM users
-            LIMIT ?
+            LIMIT $1
         "#,
     )
     .bind(limit.unwrap_or(1000))
@@ -136,17 +158,17 @@ pub async fn fetch_public_key_hash(
     pool: &sqlx::SqlitePool,
     user_id: Uuid,
 ) -> Result<String, sqlx::Error> {
-    let public_key_hash = sqlx::query!(
+    let public_key_hash = sqlx::query(
         r#"
         SELECT public_key_hash
         FROM users
         WHERE id = ?
         "#,
-        user_id
     )
+    .bind(user_id)
     .fetch_one(pool)
     .await?
-    .public_key_hash;
+    .try_get("public_key_hash")?;
 
     Ok(public_key_hash)
 }
@@ -155,8 +177,8 @@ pub async fn update_user(
     pool: &SqlitePool,
     user_id: Uuid,
     new_username: Option<&str>,
-    new_public_key: Option<&str>,
-    new_public_key_hash: Option<&str>,
+    new_public_key: Option<&PublicKey>,
+    new_public_key_hash: Option<&PublicKeyHash>,
 ) -> Result<(), Error> {
     let current_user = get_user_by_id(&pool, user_id).await?;
 
@@ -169,7 +191,7 @@ pub async fn update_user(
     }
 
     if let Some(public_key) = new_public_key {
-        if public_key.is_empty() {
+        if public_key.as_str().is_empty() {
             return Err(Error::InvalidArgument(
                 "Public Key cannot be empty".to_string(),
             ));
@@ -177,7 +199,7 @@ pub async fn update_user(
     }
 
     if let Some(public_key_hash) = new_public_key_hash {
-        if public_key_hash.is_empty() {
+        if public_key_hash.as_str().is_empty() {
             return Err(Error::InvalidArgument(
                 "Public key hash cannot be empty".to_string(),
             ));
@@ -189,21 +211,25 @@ pub async fn update_user(
     let public_key_hash = new_public_key_hash.unwrap_or(&current_user.public_key_hash);
     let updated_at = Utc::now().naive_utc();
 
-    sqlx::query!(
+    let mut args = SqliteArguments::default();
+
+    args.add(username);
+    args.add(public_key);
+    args.add(public_key_hash);
+    args.add(updated_at);
+    args.add(user_id);
+
+    sqlx::query_with(
         r#"
         UPDATE users 
         SET 
-            username = ?,
-            public_key = ?,
-            public_key_hash = ?,
-            updated_at = ?
-        WHERE id = ?
+            username = $1,
+            public_key = $2,
+            public_key_hash = $3,
+            updated_at = $4
+        WHERE id = $5
         "#,
-        username,
-        public_key,
-        public_key_hash,
-        updated_at,
-        user_id
+        args,
     )
     .execute(pool)
     .await?;
@@ -221,11 +247,12 @@ pub async fn create_message(
 ) -> Result<Option<i64>, Error> {
     let conn = pool.acquire().await?;
     let current_time = Utc::now().timestamp();
+    println!("{}", current_time);
 
     let message_id = sqlx::query!(
         r#"
         INSERT INTO messages (sender_id, recipient_id, encrypted_content, signature, parent_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
         "#,
         sender_id,
@@ -256,7 +283,7 @@ pub async fn get_message(pool: &SqlitePool, message_id: i64) -> Result<Option<Me
             is_read, 
             created_at
         FROM messages
-        WHERE id = ?
+        WHERE id = $1
         "#,
         message_id
     )
@@ -271,7 +298,7 @@ pub async fn mark_message_read(pool: &SqlitePool, message_id: i64) -> Result<(),
         r#"
         UPDATE messages
         SET is_read = 1
-        WHERE id = ?
+        WHERE id = $1
         "#,
         message_id
     )
@@ -311,16 +338,14 @@ pub async fn get_conversation(
             is_read,
             created_at
         FROM messages
-        WHERE (sender_id = ? AND recipient_id = ?)
-           OR (sender_id = ? AND recipient_id = ?)
+        WHERE (sender_id = $1 AND recipient_id = $2)
+           OR (sender_id = $2 AND recipient_id = $1)
         ORDER BY created_at DESC
-        LIMIT ?
+        LIMIT $3
         "#,
     )
     .bind(user1_id)
     .bind(user2_id)
-    .bind(user2_id)
-    .bind(user1_id)
     .bind(limit.unwrap_or(100))
     .fetch_all(pool)
     .await?;
@@ -368,7 +393,7 @@ pub async fn get_unread_messages(pool: &SqlitePool, user_id: Uuid) -> Result<Vec
             created_at,
             is_read
         FROM messages
-        WHERE recipient_id = ? AND is_read = 0
+        WHERE recipient_id = $1 AND is_read = 0
         ORDER BY created_at ASC
         "#,
     )
@@ -412,9 +437,9 @@ pub async fn get_thread_replies(
             created_at, 
             is_read
         FROM messages
-        WHERE parent_id = ?
+        WHERE parent_id = $1
         ORDER BY created_at ASC
-        LIMIT ? OFFSET ?
+        LIMIT $2 OFFSET $3
         "#,
     )
     .bind(parent_id)
@@ -465,12 +490,11 @@ pub async fn get_user_threads(
                 m.signature, m.parent_id, m.created_at, m.is_read
         FROM messages m
         JOIN messages r ON m.id = r.parent_id
-        WHERE m.sender_id = ? OR m.recipient_id = ?
+        WHERE m.sender_id = $1 OR m.recipient_id = $1
         ORDER BY m.created_at DESC
-        LIMIT ?
+        LIMIT $2
         "#,
     )
-    .bind(user_id)
     .bind(user_id)
     .bind(limit.unwrap_or(20))
     .fetch_all(pool)
@@ -493,7 +517,7 @@ pub async fn store_refresh_token(
         r#"
             INSERT INTO refresh_tokens 
             (user_id, token_hash, expires_at, device_info)
-            VALUES (?, ?, datetime(?, 'unixepoch'), ?)
+            VALUES ($1, $2, datetime($3, 'unixepoch'), $4)
         "#,
         user_id,
         token_hash,
@@ -514,7 +538,7 @@ pub async fn validate_refresh_token(
     let record = sqlx::query!(
         r#"
         SELECT id FROM refresh_tokens
-        WHERE user_id = ? AND token_hash = ? AND expires_at > CURRENT_TIMESTAMP
+        WHERE user_id = $1 AND token_hash = $2 AND expires_at > CURRENT_TIMESTAMP
         "#,
         user_id,
         token_hash
@@ -533,8 +557,8 @@ pub async fn revoke_refresh_token(
     sqlx::query!(
         r#"
         INSERT INTO revoked_tokens (token_hash, reason)
-        SELECT token_hash, ? FROM refresh_tokens
-        WHERE token_hash = ?
+        SELECT token_hash, $1 FROM refresh_tokens
+        WHERE token_hash = $2
         "#,
         reason,
         token_hash
@@ -545,7 +569,7 @@ pub async fn revoke_refresh_token(
     sqlx::query!(
         r#"
         DELETE FROM refresh_tokens
-        WHERE token_hash = ?
+        WHERE token_hash = $1
         "#,
         token_hash
     )

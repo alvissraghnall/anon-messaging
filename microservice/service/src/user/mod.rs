@@ -3,6 +3,8 @@ use db::{
     Error as SqlxError, SqlitePool, db as database,
     faker_rand::en_us::names::FullName,
     models::User,
+    public_key::PublicKey,
+    public_key_hash::PublicKeyHash,
     uuid::{self, Uuid},
 };
 use mockall::automock;
@@ -14,12 +16,7 @@ use shared::{
 #[automock]
 #[async_trait]
 pub trait UserRepository: Send + Sync {
-    async fn insert_user(
-        &self,
-        public_key_hash: &str,
-        public_key: &str,
-        username: &str,
-    ) -> Result<Uuid, AppError>;
+    async fn insert_user(&self, public_key: &str, username: &str) -> Result<Uuid, AppError>;
 
     async fn get_user_by_pubkey(&self, public_key_hash: &str) -> Result<User, AppError>;
 
@@ -40,19 +37,20 @@ pub trait UserRepository: Send + Sync {
 
 #[async_trait]
 impl UserRepository for SqlitePool {
-    async fn insert_user(
-        &self,
-        public_key_hash: &str,
-        public_key: &str,
-        username: &str,
-    ) -> Result<Uuid, AppError> {
-        let uid = database::insert_user(self, public_key_hash, public_key, username).await?;
+    async fn insert_user(&self, public_key: &str, username: &str) -> Result<Uuid, AppError> {
+        let pkey = PublicKey::new(public_key.to_string())?;
+
+        let pkey_hash = pkey.to_hash()?;
+
+        let uid = database::insert_user(self, &pkey_hash, &pkey, username).await?;
 
         Ok(uid)
     }
 
     async fn get_user_by_pubkey(&self, public_key_hash: &str) -> Result<User, AppError> {
-        let user = database::get_user_by_pubkey(self, public_key_hash).await?;
+        let pkey_hash = PublicKeyHash::new(public_key_hash.to_string())?;
+
+        let user = database::get_user_by_pubkey(self, &pkey_hash).await?;
         Ok(user)
     }
 
@@ -73,12 +71,20 @@ impl UserRepository for SqlitePool {
         new_public_key: Option<String>,
         new_public_key_hash: Option<String>,
     ) -> Result<(), AppError> {
+        let (new_pubkey, new_pubkey_hash) = if let Some(pubkey_str) = new_public_key {
+            let pubkey = PublicKey::new(pubkey_str)?;
+            let pubkey_hash = pubkey.to_hash()?;
+            (Some(pubkey), Some(pubkey_hash))
+        } else {
+            (None, None)
+        };
+
         database::update_user(
             self,
             user_id,
             new_username.as_deref(),
-            new_public_key.as_deref(),
-            new_public_key_hash.as_deref(),
+            new_pubkey.as_ref(),
+            new_pubkey_hash.as_ref(),
         )
         .await?;
 
@@ -114,11 +120,10 @@ impl<R: UserRepository> UserService<R> {
         };
 
         let pkeyclone = request.public_key.as_str();
-        let public_key_hash = sha256_hash(pkeyclone)?;
 
         let user_id = self
             .repository
-            .insert_user(&public_key_hash, &request.public_key, &username)
+            .insert_user(&request.public_key, &username)
             .await?;
 
         Ok(RegisterResponse {
@@ -182,8 +187,17 @@ fn sha256_hash(input: &str) -> Result<String, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::{
+        Engine as _, alphabet,
+        engine::{self, general_purpose},
+    };
     use chrono::{NaiveDateTime, Utc};
     use mockall::{mock, predicate::*};
+    use p256::{
+        ecdsa::{SigningKey, VerifyingKey},
+        elliptic_curve::rand_core::OsRng,
+    };
+    use rand::Rng;
 
     impl Clone for MockUserRepository {
         fn clone(&self) -> Self {
@@ -191,13 +205,29 @@ mod tests {
         }
     }
 
-    fn create_test_user(id: Uuid, username: &str, public_key: &str) -> User {
+    const CUSTOM_ENGINE: engine::GeneralPurpose =
+        engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD);
+
+    pub async fn generate_key() -> (PublicKey, PublicKeyHash) {
+        let signing_key = SigningKey::random(&mut OsRng);
+        let verifying_key = VerifyingKey::from(&signing_key);
+
+        let b64_key = CUSTOM_ENGINE.encode(verifying_key.to_encoded_point(true).as_bytes());
+        let public_key = PublicKey::new(b64_key).unwrap();
+
+        let public_key_hash = public_key.to_hash().unwrap();
+
+        (public_key, public_key_hash)
+    }
+
+    async fn create_test_user(id: Uuid, username: &str) -> User {
         let now = Utc::now().naive_utc();
+        let (public_key, public_key_hash) = generate_key().await;
         User {
             id,
             username: username.to_string(),
-            public_key: public_key.to_string(),
-            public_key_hash: sha256_hash(public_key).unwrap(),
+            public_key: public_key,
+            public_key_hash: public_key_hash,
             created_at: now,
             updated_at: now,
             last_login: None,
@@ -207,19 +237,16 @@ mod tests {
     #[tokio::test]
     async fn test_register_user_with_username() {
         let mut mock_repo = MockUserRepository::new();
+
         let test_public_key = "test_public_key";
         let public_key_hash = sha256_hash(test_public_key).unwrap();
         let expected_user_id = Uuid::now_v7();
 
         mock_repo
             .expect_insert_user()
-            .with(
-                eq(public_key_hash.clone()),
-                eq(test_public_key),
-                eq("testuser"),
-            )
+            .with(eq(test_public_key), eq("testuser"))
             .times(1)
-            .returning(move |_, _, _| Ok(expected_user_id));
+            .returning(move |_, _| Ok(expected_user_id));
 
         let service = UserService::new(mock_repo);
         let request = RegisterRequest {
@@ -243,9 +270,9 @@ mod tests {
         // Setup mock to accept any username
         mock_repo
             .expect_insert_user()
-            .with(eq(public_key_hash.clone()), eq(test_public_key), always())
+            .with(eq(test_public_key), always())
             .times(1)
-            .returning(move |_, _, username| {
+            .returning(move |_, username| {
                 assert!(!username.is_empty());
                 Ok(expected_user_id)
             });
@@ -270,14 +297,10 @@ mod tests {
 
         mock_repo
             .expect_insert_user()
-            .with(
-                eq(public_key_hash.clone()),
-                eq(test_public_key),
-                eq("testuser"),
-            )
+            .with(eq(test_public_key), eq("testuser"))
             .times(1)
-            .returning(|_, _, _| {
-                Err(AppError::DatabaseError(db::Error::InvalidArgument(
+            .returning(|_, _| {
+                Err(AppError::DatabaseError(SqlxError::InvalidArgument(
                     "DB error".to_string(),
                 )))
             });
@@ -297,7 +320,9 @@ mod tests {
         let mut mock_repo = MockUserRepository::new();
         let test_public_key = "test_public_key";
         let public_key_hash = sha256_hash(test_public_key).unwrap();
-        let test_user = create_test_user(Uuid::now_v7(), "testuser", test_public_key);
+        let test_user = create_test_user(Uuid::now_v7(), "testuser").await;
+
+        let test_user_key = test_user.public_key.clone();
 
         mock_repo
             .expect_get_user_by_pubkey()
@@ -312,7 +337,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.username, "testuser");
-        assert_eq!(result.public_key, test_public_key);
+        assert_eq!(result.public_key.as_str(), test_user_key.as_str());
     }
 
     #[tokio::test]
@@ -359,7 +384,8 @@ mod tests {
     async fn test_get_user_by_id_success() {
         let mut mock_repo = MockUserRepository::new();
         let user_id = Uuid::now_v7();
-        let test_user = create_test_user(user_id, "testuser", "test_public_key");
+        let test_user = create_test_user(user_id, "testuser").await;
+        let test_user_key = test_user.public_key.clone();
 
         mock_repo
             .expect_get_user_by_id()
@@ -372,6 +398,7 @@ mod tests {
 
         assert_eq!(result.id, user_id);
         assert_eq!(result.username, "testuser");
+        assert_eq!(result.public_key.as_str(), test_user_key.as_str());
     }
 
     #[tokio::test]
@@ -396,9 +423,11 @@ mod tests {
         let mut mock_repo = MockUserRepository::new();
         let limit = Some(10);
         let test_users = vec![
-            create_test_user(Uuid::now_v7(), "user1", "key1"),
-            create_test_user(Uuid::now_v7(), "user2", "key2"),
+            create_test_user(Uuid::now_v7(), "user1").await,
+            create_test_user(Uuid::now_v7(), "user2").await,
         ];
+        let test_user_key0 = test_users[0].public_key.clone();
+        let test_user_key1 = test_users[1].public_key.clone();
 
         mock_repo
             .expect_get_users()
@@ -411,16 +440,18 @@ mod tests {
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].username, "user1");
+        assert_eq!(result[0].public_key.as_str(), test_user_key0.as_str());
         assert_eq!(result[1].username, "user2");
+        assert_eq!(result[1].public_key.as_str(), test_user_key1.as_str());
     }
 
     #[tokio::test]
     async fn test_get_users_without_limit() {
         let mut mock_repo = MockUserRepository::new();
         let test_users = vec![
-            create_test_user(Uuid::now_v7(), "user1", "key1"),
-            create_test_user(Uuid::now_v7(), "user2", "key2"),
-            create_test_user(Uuid::now_v7(), "user3", "key3"),
+            create_test_user(Uuid::now_v7(), "user1").await,
+            create_test_user(Uuid::now_v7(), "user2").await,
+            create_test_user(Uuid::now_v7(), "user3").await,
         ];
 
         mock_repo
@@ -460,7 +491,7 @@ mod tests {
             .with(eq(Some(5)))
             .times(1)
             .returning(|_| {
-                Err(AppError::DatabaseError(db::Error::InvalidArgument(
+                Err(AppError::DatabaseError(SqlxError::InvalidArgument(
                     "DB error".to_string(),
                 )))
             });
@@ -586,7 +617,7 @@ mod tests {
             .with(always(), always(), always(), always())
             .times(1)
             .returning(|_, _, _, _| {
-                Err(AppError::DatabaseError(db::Error::InvalidArgument(
+                Err(AppError::DatabaseError(SqlxError::InvalidArgument(
                     "DB error".to_string(),
                 )))
             });
@@ -642,7 +673,7 @@ mod tests {
             .with(eq(user_id))
             .times(1)
             .returning(|_| {
-                Err(AppError::DatabaseError(db::Error::InvalidArgument(
+                Err(AppError::DatabaseError(SqlxError::InvalidArgument(
                     "DB error".to_string(),
                 )))
             });

@@ -469,6 +469,7 @@ dependencies = [
  "sha2",
  "sqlx",
  "sqlx-cli",
+ "thiserror 2.0.12",
  "tokio",
  "utoipa",
  "uuid",

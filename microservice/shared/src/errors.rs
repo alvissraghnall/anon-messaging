@@ -30,6 +30,12 @@ pub enum AppError {
 
     #[error("Forbidden: {0}")]
     Forbidden(String),
+
+    #[error("Public key hash error: {0}")]
+    PublicKeyHashError(#[from] db::public_key_hash::PublicKeyHashError),
+
+    #[error("Public key error: {0}")]
+    PublicKeyError(#[from] db::public_key::PublicKeyError),
 }
 
 impl ResponseError for AppError {
@@ -65,6 +71,12 @@ impl ResponseError for AppError {
                 HttpResponse::Unauthorized().json("Authentication failed")
             }
             AppError::Forbidden(msg) => HttpResponse::Forbidden().json(msg),
+            AppError::PublicKeyHashError(e) => {
+                HttpResponse::BadRequest().json(e.to_string())
+            }
+            AppError::PublicKeyError(e) => {
+                HttpResponse::BadRequest().json(e.to_string())
+            }
         }
     }
 }
