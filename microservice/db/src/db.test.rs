@@ -904,6 +904,143 @@ async fn test_get_thread_replies_with_limit_offset() -> Result<(), Error> {
 }
 
 #[tokio::test]
+async fn test_get_complete_thread_with_replies() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+
+    let user1_id = Uuid::now_v7();
+    let user2_id = Uuid::now_v7();
+    create_test_user(&pool, user1_id).await;
+    create_test_user(&pool, user2_id).await;
+
+    // Create parent message
+    let parent_id = create_message(&pool, user1_id, user2_id, "Parent message", None, None)
+        .await?
+        .unwrap();
+
+    // Create replies
+    let reply1_id = create_message(&pool, user2_id, user1_id, "First reply", None, Some(parent_id))
+        .await?
+        .unwrap();
+
+    let reply2_id = create_message(&pool, user1_id, user2_id, "Second reply", None, Some(parent_id))
+        .await?
+        .unwrap();
+
+    // Get complete thread
+    let thread = get_complete_thread(&pool, parent_id, None).await?;
+
+    assert_eq!(thread.len(), 3);
+    assert_eq!(thread[0].id, parent_id);
+    assert!(thread.iter().any(|m| m.id == reply1_id));
+    assert!(thread.iter().any(|m| m.id == reply2_id));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_complete_thread_no_replies() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+
+    let user1_id = Uuid::now_v7();
+    let user2_id = Uuid::now_v7();
+    create_test_user(&pool, user1_id).await;
+    create_test_user(&pool, user2_id).await;
+
+    // Create parent message without replies
+    let parent_id = create_message(&pool, user1_id, user2_id, "Parent only", None, None)
+        .await?
+        .unwrap();
+
+    let thread = get_complete_thread(&pool, parent_id, None).await?;
+
+    assert_eq!(thread.len(), 1);
+    assert_eq!(thread[0].id, parent_id);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_complete_thread_not_found() {
+    let pool = setup_test_db().await;
+
+    let result = get_complete_thread(&pool, 9999, None).await;
+
+    assert!(matches!(result, Err(Error::RowNotFound)));
+}
+
+#[tokio::test]
+async fn test_get_complete_thread_with_nested_replies() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+
+    let user1 = Uuid::now_v7();
+    let user2 = Uuid::now_v7();
+    create_test_user(&pool, user1).await;
+    create_test_user(&pool, user2).await;
+
+    let parent_id = create_message(&pool, user1, user2, "Parent", None, None)
+        .await?
+        .unwrap();
+
+    let reply_id = create_message(&pool, user2, user1, "Reply", None, Some(parent_id))
+        .await?
+        .unwrap();
+
+    let nested_id = create_message(&pool, user1, user2, "Nested reply", None, Some(parent_id))
+        .await?
+        .unwrap();
+
+    let thread = get_complete_thread(&pool, parent_id, None).await?;
+
+    assert_eq!(thread.len(), 3);
+    assert_eq!(thread[0].id, parent_id);
+    assert!(thread.iter().any(|m| m.id == reply_id));
+    assert!(thread.iter().any(|m| m.id == nested_id));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_complete_thread_with_deeply_nested_replies() -> Result<(), Error> {
+    let pool = setup_test_db().await;
+
+    let user = Uuid::now_v7();
+    create_test_user(&pool, user).await;
+
+    let mut parent_id = create_message(&pool, user, user, "Level 0", None, None)
+        .await?
+        .unwrap();
+
+    let mut expected_ids = vec![parent_id];
+
+    // Create a chain of 10 nested replies (deep nesting)
+    for level in 1..=10 {
+        let msg = create_message(
+            &pool,
+            user,
+            user,
+            &format!("Level {}", level),
+            None,
+            Some(parent_id),
+        )
+        .await?
+        .unwrap();
+        expected_ids.push(msg);
+        parent_id = msg;
+    }
+
+    let thread = get_complete_thread(&pool, expected_ids[0], None).await?;
+
+    // All messages should be returned in timestamp ascending order
+    assert_eq!(thread.len(), expected_ids.len());
+
+    for (i, msg) in thread.iter().enumerate() {
+        assert_eq!(msg.id, expected_ids[i], "Mismatch at level {}", i);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
 #[serial]
 async fn test_store_and_validate_refresh_token() -> Result<(), Error> {
     let pool = setup_test_db().await;
@@ -1076,7 +1213,7 @@ async fn test_update_user_no_changes() {
 
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(700)).await;
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
     let result = update_user(&pool, user_id, None, None, None).await;
 
@@ -1100,7 +1237,7 @@ async fn test_update_user_username() {
 
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
     let new_username = "updated_username";
     let result = update_user(&pool, user_id, Some(new_username), None, None).await;

@@ -42,6 +42,16 @@ pub trait MessageRepository: Send + Sync {
         user_id: Uuid,
         limit: Option<i64>,
     ) -> Result<Vec<Message>, AppError>;
+
+    async fn mark_message_read(
+        pool: &SqlitePool, 
+        message_id: i64
+    ) -> Result<(), AppError>;
+    
+    async fn get_unread_messages(
+        pool: &SqlitePool, 
+        user_id: Uuid,
+    ) -> Result<(), AppError>;
 }
 
 #[async_trait]

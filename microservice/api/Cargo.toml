@@ -15,6 +15,9 @@ service = { version = "0.1.0", path = "../service" }
 shared = { version = "0.1.0", path = "../shared" }
 sqlx = "0.8.3"
 utoipa = { version = "5.3.1", features = ["uuid", "actix_extras", "chrono"] }
+validator = "0.20.0"
 
 [dev-dependencies]
 actix-http = "3.9.0"
+futures = "0.3.31"
+tokio = "1.44.2"

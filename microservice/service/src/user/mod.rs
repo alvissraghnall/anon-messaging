@@ -35,6 +35,12 @@ pub trait UserRepository: Send + Sync {
     async fn fetch_public_key_hash(&self, user_id: Uuid) -> Result<String, AppError>;
 }
 
+impl Clone for MockUserRepository {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
 #[async_trait]
 impl UserRepository for SqlitePool {
     async fn insert_user(&self, public_key: &str, username: &str) -> Result<Uuid, AppError> {
@@ -133,8 +139,9 @@ impl<R: UserRepository> UserService<R> {
     }
 
     pub async fn get_user_by_public_key(&self, public_key: &str) -> Result<User, AppError> {
-        let public_key_hash = sha256_hash(public_key)?;
-        self.repository.get_user_by_pubkey(&public_key_hash).await
+        let pkey = PublicKey::new(public_key.to_string())?;
+        let public_key_hash = pkey.to_hash()?;
+        self.repository.get_user_by_pubkey(public_key_hash.as_str()).await
     }
 
     pub async fn get_user_by_id(&self, user_id: Uuid) -> Result<User, AppError> {
@@ -198,12 +205,6 @@ mod tests {
         elliptic_curve::rand_core::OsRng,
     };
     use rand::Rng;
-
-    impl Clone for MockUserRepository {
-        fn clone(&self) -> Self {
-            Self::default()
-        }
-    }
 
     const CUSTOM_ENGINE: engine::GeneralPurpose =
         engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD);
@@ -318,21 +319,20 @@ mod tests {
     #[tokio::test]
     async fn test_get_user_by_public_key_success() {
         let mut mock_repo = MockUserRepository::new();
-        let test_public_key = "test_public_key";
-        let public_key_hash = sha256_hash(test_public_key).unwrap();
         let test_user = create_test_user(Uuid::now_v7(), "testuser").await;
 
         let test_user_key = test_user.public_key.clone();
+        let test_user_key_hash = test_user.public_key_hash.clone();
 
         mock_repo
             .expect_get_user_by_pubkey()
-            .with(eq(public_key_hash.clone()))
+            .with(eq(test_user_key_hash.to_string()))
             .times(1)
             .returning(move |_| Ok(test_user.clone()));
 
         let service = UserService::new(mock_repo);
         let result = service
-            .get_user_by_public_key(test_public_key)
+            .get_user_by_public_key(&test_user_key.to_string())
             .await
             .unwrap();
 
@@ -343,17 +343,16 @@ mod tests {
     #[tokio::test]
     async fn test_get_user_by_public_key_not_found() {
         let mut mock_repo = MockUserRepository::new();
-        let test_public_key = "test_public_key";
-        let public_key_hash = sha256_hash(test_public_key).unwrap();
+        let (test_public_key, public_key_hash) = generate_key().await;
 
         mock_repo
             .expect_get_user_by_pubkey()
-            .with(eq(public_key_hash.clone()))
+            .with(eq(public_key_hash.to_string()))
             .times(1)
             .returning(|_| Err(AppError::NotFound("User not found".to_string())));
 
         let service = UserService::new(mock_repo);
-        let result = service.get_user_by_public_key(test_public_key).await;
+        let result = service.get_user_by_public_key(test_public_key.as_str()).await;
 
         assert!(matches!(result, Err(AppError::NotFound(_))));
     }

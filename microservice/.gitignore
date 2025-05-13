@@ -2,3 +2,4 @@
 *.db
 *.db-*
 tarpaulin-report.html
+*.txt

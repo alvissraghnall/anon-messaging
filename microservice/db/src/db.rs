@@ -10,12 +10,15 @@ use std::path::PathBuf;
 use std::sync::Once;
 use uuid::Uuid;
 
+use futures::future::BoxFuture;
+use std::collections::BTreeMap;
+use std::cmp::Ordering;
+
 static INIT: Once = Once::new();
 
 pub async fn create_db_pool() -> Result<SqlitePool, Error> {
     dotenv().ok();
-    let root_dir = PathBuf::from(env::current_dir().unwrap().parent().unwrap());
-    let env_file_path = root_dir.join(".env.production");
+    let env_file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".env.production");
     INIT.call_once(|| {
         dotenv::from_path(env_file_path).expect("ENV PRODUCTION FILE MUST EXIST!");
     });
@@ -454,7 +457,7 @@ pub async fn get_thread_replies(
         .collect())
 }
 
-/// Gets a complete thread including the parent message and all replies
+/*
 pub async fn get_complete_thread(
     pool: &SqlitePool,
     thread_root_id: i64,
@@ -474,6 +477,45 @@ pub async fn get_complete_thread(
     thread.append(&mut replies);
 
     Ok(thread)
+}*/
+
+/// Gets a complete thread including the parent message and all nested replies (recursively),
+/// ordered by timestamp ascending.
+pub async fn get_complete_thread(
+    pool: &SqlitePool,
+    thread_root_id: i64,
+    limit: Option<i64>,
+) -> Result<Vec<Message>, Error> {
+    let parent_message = match get_message(pool, thread_root_id).await? {
+        Some(msg) => msg,
+        None => return Err(Error::RowNotFound),
+    };
+
+    let mut messages = Vec::new();
+    messages.push(parent_message.clone());
+
+    // Recursive fetcher, boxed to allow async recursion
+    fn fetch_replies_recursive<'a>(
+        pool: &'a SqlitePool,
+        parent_id: i64,
+        limit: Option<i64>,
+        acc: &'a mut Vec<Message>,
+    ) -> BoxFuture<'a, Result<(), Error>> {
+        Box::pin(async move {
+            let replies = get_thread_replies(pool, parent_id, limit, None).await?;
+            for reply in replies.iter() {
+                acc.push(reply.clone());
+                fetch_replies_recursive(pool, reply.id, limit, acc).await?;
+            }
+            Ok(())
+        })
+    }
+
+    fetch_replies_recursive(pool, parent_message.id, limit, &mut messages).await?;
+
+    messages.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+    Ok(messages)
 }
 
 pub async fn get_user_threads(

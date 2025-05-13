@@ -36,6 +36,9 @@ pub enum AppError {
 
     #[error("Public key error: {0}")]
     PublicKeyError(#[from] db::public_key::PublicKeyError),
+
+    #[error("Internal server error: {0}")]
+    InternalError(String),
 }
 
 impl ResponseError for AppError {
@@ -71,12 +74,9 @@ impl ResponseError for AppError {
                 HttpResponse::Unauthorized().json("Authentication failed")
             }
             AppError::Forbidden(msg) => HttpResponse::Forbidden().json(msg),
-            AppError::PublicKeyHashError(e) => {
-                HttpResponse::BadRequest().json(e.to_string())
-            }
-            AppError::PublicKeyError(e) => {
-                HttpResponse::BadRequest().json(e.to_string())
-            }
+            AppError::PublicKeyHashError(e) => HttpResponse::BadRequest().json(e.to_string()),
+            AppError::PublicKeyError(e) => HttpResponse::BadRequest().json(e.to_string()),
+            AppError::InternalError(msg) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }
