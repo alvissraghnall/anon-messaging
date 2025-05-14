@@ -318,52 +318,7 @@ mod tests {
     use sqlx::types::chrono::Utc;
     use validator::{ValidationError, ValidationErrors};
     use mockall::mock;
-    // use service::message::repository::MockMessageRepository;
-
-    mock! {
-        Repository {}
-
-        #[async_trait::async_trait]
-        impl MessageRepository for Repository {
-            async fn get_message_by_id(&self, message_id: i64) -> Result<Option<Message>, AppError>;
-            async fn insert_message(
-                &self,
-                sender_id: Uuid,
-                recipient_id: Uuid,
-                encrypted_content: &str,
-                signature: Option<String>,
-                parent_id: Option<i64>,
-            ) -> Result<Option<i64>, AppError>;
-            async fn get_conversation(
-                &self,
-                user1_id: Uuid,
-                user2_id: Uuid,
-                limit: Option<i64>,
-            ) -> Result<Vec<Message>, AppError>;
-            async fn get_thread_replies(
-                &self,
-                parent_id: i64,
-                limit: Option<i64>,
-                offset: Option<i64>,
-            ) -> Result<Vec<Message>, AppError>;
-            async fn get_complete_thread(
-                &self,
-                thread_root_id: i64,
-                limit: Option<i64>,
-            ) -> Result<Vec<Message>, AppError>;
-            async fn get_user_threads(
-                &self,
-                user_id: Uuid,
-                limit: Option<i64>,
-            ) -> Result<Vec<Message>, AppError>;
-        }
-    }
-
-    impl Clone for MockRepository {
-        fn clone(&self) -> Self {
-            Self::default()
-        }
-    }
+    use service::message::repository::MockMessageRepository as MockRepository;
 
     async fn setup_controller() -> (
         Data<MessageControllerImpl<MockRepository>>,
