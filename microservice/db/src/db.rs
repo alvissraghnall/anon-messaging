@@ -16,6 +16,17 @@ use std::cmp::Ordering;
 
 static INIT: Once = Once::new();
 
+#[derive(Clone)]
+pub struct SqliteDb {
+    pub pool: SqlitePool,
+}
+
+impl SqliteDb {
+    pub fn new(pool: SqlitePool) -> Self {
+        SqliteDb { pool }
+    }
+}
+
 pub async fn create_db_pool() -> Result<SqlitePool, Error> {
     dotenv().ok();
     let env_file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".env.production");

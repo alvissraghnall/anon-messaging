@@ -19,6 +19,7 @@ thiserror = "2.0.12"
 actix-web = "4.10.2"
 sqlx = "0.8.5"
 utoipa = { version = "5.3.1", features = ["uuid"] }
+jsonwebtoken = "9.3.1"
 
 [dev-dependencies]
 generic-array = "0.14"

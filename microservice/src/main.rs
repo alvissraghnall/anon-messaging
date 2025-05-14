@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{env, sync::Arc};
 use api::{user::{configure_routes as configure_user_routes, UserController, UserControllerImpl}};
 use service::{user::UserService};
-
+use api::token::TokenControllerImpl;
 use service::message::{
     repository::MessageRepository,
     service::MessageService,
@@ -32,16 +32,18 @@ async fn main() -> std::io::Result<()> {
     let message_controller = Arc::new(
         MessageControllerImpl::new(message_service)
     ) as Arc<dyn MessageController>;
-
+    
     HttpServer::new(move || {
         let user_controller = user_controller.clone();
         let message_controller = message_controller.clone();
+        let token_repo = pool.clone();
         
         App::new()
             .app_data(web::Data::new(user_controller))
             .app_data(web::Data::new(message_controller))
             .configure(configure_message_routes)
             .configure(configure_user_routes)
+            .configure(TokenControllerImpl::configure(token_repo))
 //            .route("/generate-keys", web::post().to(generate_keys))
     })
     .bind(("127.0.0.1", 8080))?

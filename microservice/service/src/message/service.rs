@@ -123,6 +123,15 @@ mod tests {
                 user_id: Uuid,
                 limit: Option<i64>,
             ) -> Result<Vec<Message>, AppError>;
+            async fn mark_message_read(
+                &self,
+                message_id: i64
+            ) -> Result<(), AppError>;
+
+            async fn get_unread_messages(
+                &self,
+                user_id: Uuid,
+            ) -> Result<Vec<Message>, AppError>;
         }
     }
 

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use db::{Error as SqlxError, SqlitePool, db as database, models::Message, uuid::Uuid};
+use db::{Error as SqlxError, SqlitePool, db::{self as database, SqliteDb}, message_db::MessageDb, models::Message, uuid::Uuid};
 use mockall::automock;
 use shared::errors::AppError;
 
@@ -44,15 +44,85 @@ pub trait MessageRepository: Send + Sync {
     ) -> Result<Vec<Message>, AppError>;
 
     async fn mark_message_read(
-        pool: &SqlitePool, 
+        &self,
         message_id: i64
     ) -> Result<(), AppError>;
     
     async fn get_unread_messages(
-        pool: &SqlitePool, 
+        &self,
         user_id: Uuid,
-    ) -> Result<(), AppError>;
+    ) -> Result<Vec<Message>, AppError>;
 }
+
+impl Clone for MockMessageRepository {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+/*
+#[async_trait]
+impl MessageRepository for SqliteDb {
+    async fn insert_message(
+        &self,
+        sender_id: Uuid,
+        recipient_id: Uuid,
+        encrypted_content: &str,
+        signature: Option<String>,
+        parent_id: Option<i64>,
+    ) -> Result<Option<i64>, AppError> {
+        self.create_message(sender_id, recipient_id, encrypted_content, signature, parent_id)
+            .await
+            .map_err(AppError::from)
+    }
+
+    async fn get_message_by_id(&self, message_id: i64) -> Result<Option<Message>, AppError> {
+        MessageDb::get_message(self, message_id).await.map_err(AppError::from)
+    }
+
+    async fn get_conversation(
+        &self,
+        user1_id: Uuid,
+        user2_id: Uuid,
+        limit: Option<i64>,
+    ) -> Result<Vec<Message>, AppError> {
+        MessageDb::get_conversation(self, user1_id, user2_id, limit).await.map_err(AppError::from)
+    }
+
+    async fn get_thread_replies(
+        &self,
+        parent_id: i64,
+        limit: Option<i64>,
+        offset: Option<i64>,
+    ) -> Result<Vec<Message>, AppError> {
+        MessageDb::get_thread_replies(self, parent_id, limit, offset).await.map_err(AppError::from)
+    }
+
+    async fn get_complete_thread(
+        &self,
+        thread_root_id: i64,
+        limit: Option<i64>,
+    ) -> Result<Vec<Message>, AppError> {
+        MessageDb::get_complete_thread(self, thread_root_id, limit).await.map_err(AppError::from)
+    }
+
+    async fn get_user_threads(
+        &self,
+        user_id: Uuid,
+        limit: Option<i64>,
+    ) -> Result<Vec<Message>, AppError> {
+        MessageDb::get_user_threads(self, user_id, limit).await.map_err(AppError::from)
+    }
+
+    async fn mark_message_read(&self, message_id: i64) -> Result<(), AppError> {
+        MessageDb::mark_message_read(self, message_id).await.map_err(AppError::from)
+    }
+
+    async fn get_unread_messages(&self, user_id: Uuid) -> Result<Vec<Message>, AppError> {
+        MessageDb::get_unread_messages(self, user_id).await.map_err(AppError::from)
+    }
+}
+*/
 
 #[async_trait]
 impl MessageRepository for SqlitePool {
@@ -111,6 +181,20 @@ impl MessageRepository for SqlitePool {
         limit: Option<i64>,
     ) -> Result<Vec<Message>, AppError> {
         Ok(database::get_user_threads(self, user_id, limit).await?)
+    }
+    
+    async fn mark_message_read(
+        &self,
+        message_id: i64
+    ) -> Result<(), AppError> {
+        Ok(database::mark_message_read(self, message_id).await?)        
+    }
+
+    async fn get_unread_messages(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<Message>, AppError> {
+        Ok(database::get_unread_messages(self, user_id).await?)
     }
 }
 
@@ -549,5 +633,83 @@ mod tests {
 
         let result = mock.get_complete_thread(404, Some(10)).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_mark_message_read() {
+        let mut mock = MockMessageRepository::new();
+        let message_id = 42;
+
+        mock.expect_mark_message_read()
+            .with(predicate::eq(message_id))
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let result = mock.mark_message_read(message_id).await;
+
+        assert!(result.is_ok());
+    }
+
+    
+
+    #[tokio::test]
+    async fn test_get_unread_messages() {
+        let mut mock = MockMessageRepository::new();
+        let user_id = create_test_uuid(1);
+
+        let unread_messages = vec![
+            create_test_message(1, user_id, create_test_uuid(2), "Hello", None, None),
+            create_test_message(2, create_test_uuid(2), user_id, "World", None, None),
+        ];
+
+        mock.expect_get_unread_messages()
+            .with(predicate::eq(user_id))
+            .times(1)
+            .returning(move |_| Ok(unread_messages.clone()));
+
+        let result = mock.get_unread_messages(user_id).await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].encrypted_content, "Hello");
+        assert_eq!(result[1].encrypted_content, "World");
+    }
+
+    #[tokio::test]
+    async fn test_mark_message_read_failure() {
+        let mut mock = MockMessageRepository::new();
+        let message_id = 42;
+
+        mock.expect_mark_message_read()
+            .with(predicate::eq(message_id))
+            .times(1)
+            .returning(|_| Err(AppError::DatabaseError(db::Error::WorkerCrashed)));
+
+        let result = mock.mark_message_read(message_id).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(AppError::DatabaseError(db::Error::WorkerCrashed))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_get_unread_messages_failure() {
+        let mut mock = MockMessageRepository::new();
+        let user_id = create_test_uuid(1);
+
+        mock.expect_get_unread_messages()
+            .with(predicate::eq(user_id))
+            .times(1)
+            .returning(|_| Err(AppError::NotFound("No messages found".into())));
+
+        let result = mock.get_unread_messages(user_id).await;
+
+        assert!(result.is_err());
+        if let Err(AppError::NotFound(msg)) = result {
+            assert_eq!(msg, "No messages found");
+        } else {
+            panic!("Expected NotFound error");
+        }
     }
 }

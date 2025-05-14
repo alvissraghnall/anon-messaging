@@ -614,11 +614,14 @@ dependencies = [
 name = "db"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "base64",
  "chrono",
  "dotenv",
  "faker_rand",
+ "futures",
  "hex",
+ "mockall",
  "rand 0.8.5",
  "serde",
  "serde_with",

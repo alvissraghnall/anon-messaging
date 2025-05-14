@@ -1,6 +1,7 @@
 use actix_web::{HttpResponse, ResponseError};
 use sqlx::error::DatabaseError;
 use thiserror::Error;
+use jsonwebtoken::errors::Error as JwtError;
 
 #[derive(Debug, Error)]
 pub enum AppError {
@@ -25,8 +26,8 @@ pub enum AppError {
     #[error("Not found: {0}")]
     NotFound(String),
 
-    #[error("Authentication failed")]
-    AuthenticationError,
+    #[error("Authentication failed: {0}")]
+    AuthenticationError(String),
 
     #[error("Forbidden: {0}")]
     Forbidden(String),
@@ -70,8 +71,8 @@ impl ResponseError for AppError {
             AppError::InvalidInputSyntax => HttpResponse::BadRequest().json("Invalid input syntax"),
             AppError::ValidationError(e) => HttpResponse::BadRequest().json(e),
             AppError::NotFound(msg) => HttpResponse::NotFound().json(msg),
-            AppError::AuthenticationError => {
-                HttpResponse::Unauthorized().json("Authentication failed")
+            AppError::AuthenticationError(msg) => {
+                HttpResponse::Unauthorized().json(msg)
             }
             AppError::Forbidden(msg) => HttpResponse::Forbidden().json(msg),
             AppError::PublicKeyHashError(e) => HttpResponse::BadRequest().json(e.to_string()),
@@ -99,5 +100,11 @@ impl From<sqlx::Error> for AppError {
                 _ => AppError::DatabaseError(err),
             }
         }
+    }
+}
+
+impl From<JwtError> for AppError {
+    fn from(err: JwtError) -> Self {
+        AppError::AuthenticationError(err.to_string())
     }
 }

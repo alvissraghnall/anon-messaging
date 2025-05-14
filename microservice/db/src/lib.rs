@@ -8,3 +8,8 @@ pub mod models;
 pub mod public_key;
 pub mod public_key_hash;
 pub mod unix_timestamp;
+pub mod token_db;
+pub mod user_db;
+pub mod message_db;
+
+
