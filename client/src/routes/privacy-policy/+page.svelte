@@ -93,10 +93,10 @@
           The limited information we collect is used only for:
         </p>
         <ul class="list-disc pl-6 mb-4">
-          <li>Providing and maintaining our service</li>
-          <li>Improving our service</li>
-          <li>Monitoring for abuse and security purposes</li>
-          <li>Ensuring operational functionality</li>
+          <li>Providing and maintaining our service.</li>
+          <li>Improving our service.</li>
+          <li>Monitoring for abuse and security purposes.</li>
+          <li>Ensuring operational functionality.</li>
         </ul>
       </section>
 
@@ -118,9 +118,8 @@
           Our service uses minimal cookies and local storage:
         </p>
         <ul class="list-disc pl-6 mb-4">
-          <li>Local storage is used to store your cryptographic keys</li>
-          <li>We use essential cookies for basic functionality</li>
-          <li>We do not use tracking or advertising cookies</li>
+          <li>Local storage is used to store your cryptographic keys and theme preferences.</li>
+          <li>We do not use tracking or advertising cookies.</li>
         </ul>
       </section>
 
@@ -130,10 +129,10 @@
           Our service does not integrate with third-party services that would compromise anonymity. We do not:
         </p>
         <ul class="list-disc pl-6 mb-4">
-          <li>Share any data with third parties</li>
-          <li>Use third-party analytics</li>
-          <li>Integrate with social media platforms</li>
-          <li>Use advertising networks</li>
+          <li>Share any data with third parties.</li>
+          <li>Use third-party analytics.</li>
+          <li>Integrate with social media platforms.</li>
+          <li>Use advertising networks.</li>
         </ul>
       </section>
 
@@ -178,7 +177,7 @@
           If you have any questions about this Privacy Policy, please contact us at:
         </p>
         <ul class="list-disc pl-6 mb-4">
-          <li>Through our anonymous feedback form on the site</li>
+          <li>Through our anonymous feedback form on {data.pageUrl}/contact  </li>
           <li>By email: { data.email }</li>
         </ul>
       </section>
