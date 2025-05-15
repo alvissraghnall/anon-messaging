@@ -1,46 +1,17 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { Icon, IconName } from '$lib';
   import '../app.css';
-	let { children } = $props();
-	
-	let darkMode = $state(false);
-	function toggleDarkMode() {
-    darkMode = !darkMode;
-    localStorage.setItem('darkMode', darkMode.toString());
-    updateTheme();
-  }
-
-  const loadSprite = () => {
-    if (browser) {
-      const spriteLink = document.createElement('link');
-      spriteLink.rel = 'preload';
-      spriteLink.href = '/sprite.svg';
-      spriteLink.as = 'image';
-      spriteLink.type = 'image/svg+xml';
-      document.head.appendChild(spriteLink);
-    }
-  }
+  import { darkMode, toggleDarkMode, initTheme, loadSprite } from '$lib/stores/theme';
+  
+  let { children } = $props();
 
   onMount(() => {
     loadSprite();
-    const storedPreference = localStorage.getItem('darkMode');
-    if (storedPreference) {
-      darkMode = storedPreference === 'true';
-    } else {
-      darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    updateTheme();
+	initTheme();
   });
 
-  function updateTheme() {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }
 </script>
 
 <!-- Header -->
@@ -49,7 +20,8 @@
 >
 	<div class="container mx-auto flex items-center justify-between px-4 py-4">
 		<div class="flex items-center">
-			<div class="mr-2 text-2xl text-indigo-600 dark:text-indigo-400">🔐</div>
+			
+			<Icon name={ IconName.PSEUDOCROWN } size={24} className="mr-2 mb-1 h-6 w-6 text-indigo-600 dark:text-indigo-400" />
 			<a
 				href="/"
 				class="text-xl font-bold text-gray-900 transition-colors duration-300 md:text-2xl dark:text-white"
@@ -86,17 +58,7 @@
 				class="rounded-lg bg-gray-200 p-2 text-gray-800 transition-colors duration-200 hover:cursor-pointer hover:bg-gray-300 focus:ring-2 focus:ring-gray-400 focus:outline-none dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
 				aria-label="Toggle dark mode"
 			>
-				<!-- {#if darkMode} -->
-					<!-- <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg> -->
-					<Icon name={ darkMode ? IconName.SUNLIGHT : IconName.MOON } size={24} />
-				<!-- {:else} -->
-					<!-- <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-            </svg> -->
-					<!-- <Icon name={IconName.MOON} size={24} />
-				{/if} -->
+				<Icon name={ $darkMode ? IconName.SUNLIGHT : IconName.MOON } size={24} />
 			</button>
 
 			<a

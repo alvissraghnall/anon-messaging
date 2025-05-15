@@ -4,10 +4,11 @@
   import { flip } from "svelte/animate";
   import { fly, fade, slide,  } from 'svelte/transition';
   import { spring, } from 'svelte/motion';
+  import { Icon, IconName } from '$lib';
+  import { darkMode } from '$lib/stores/theme';
 
   let isLoading = false;
   let error = '';
-  let darkMode = false;
   let mounted = false;
 
   const staggerDelay = 150;
@@ -65,11 +66,13 @@
             disabled={isLoading}
           >
             {#if isLoading}
-              <span class="inline-block animate-spin mr-2">⟳</span>
-              Creating Identity...
-            {:else}
-              Create New Identity
-            {/if}
+		      <span class="inline-flex items-center">
+		        <span class="animate-spin mr-2 border-2 border-white border-t-transparent rounded-full w-4 h-4"></span>
+		        <span>Creating Identity...</span>
+		      </span>
+		    {:else}
+		      <span>Create New Identity</span>
+		    {/if}
           </button>
 
           <a href="/login" class="px-6 py-3 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-300 transform hover:scale-105">
@@ -175,26 +178,26 @@
       <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto mb-24">
         {#each [
           {
-            icon: "🔒",
+            icon: IconName.LOCK,
             title: "End-to-End Encryption",
             description: "All messages are encrypted with state-of-the-art asymmetric cryptography, ensuring only the intended recipient can read them."
           },
           {
-            icon: "👤",
+            icon: IconName.USERSECRET,
             title: "Total Anonymity",
             description: "No personally identifiable information is ever collected. Your identity is protected by cryptographic keypairs."
           },
           {
-            icon: "🔥",
-            title: "Self-Destructing Messages",
-            description: "Set your messages to automatically delete after being read or after a specific time period."
+            icon: IconName.CHATBUBBLELEFTRIGHT,
+            title: "Reply Anonymous Messages",
+            description: "Respond to messages with fun, anonymous replies and keep conversations flowing."
           }
         ] as feature, i}
           <div
             class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transform transition-all duration-300 hover:-translate-y-1 cursor-pointer"
             in:fly={{ y: 20, duration: 800, delay: 600 + (i * staggerDelay) }}
           >
-            <div class="text-indigo-600 dark:text-indigo-400 text-2xl mb-4">{feature.icon}</div>
+            <div class="text-indigo-600 dark:text-indigo-400 text-2xl mb-4"><Icon name={feature.icon} size={24} color={feature.icon === IconName.USERSECRET && $darkMode ? "#7c86ff" : "#4f39f6" } /></div>
             <h3 class="text-xl font-semibold mb-2 text-gray-900 dark:text-white transition-colors duration-300">{feature.title}</h3>
             <p class="text-gray-600 dark:text-gray-300 transition-colors duration-300">
               {feature.description}
