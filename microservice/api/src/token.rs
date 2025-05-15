@@ -12,18 +12,21 @@ use validator::{Validate, ValidationError, ValidationErrors};
 use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm, TokenData};
 use std::time::{SystemTime, UNIX_EPOCH};
 use service::sha2::{Sha256, Digest};
+use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::fs;
 
 #[derive(Debug, Serialize, Deserialize)]
-struct JwtClaims {
+pub struct JwtClaims {
     /// Subject (user ID)
-    sub: String,
+    pub sub: String,
     /// Expiration time (Unix timestamp)
-    exp: i64,
+    pub exp: i64,
     /// Issued at time (Unix timestamp)
-    iat: i64,
+    pub iat: i64,
     /// Optional device information
     #[serde(skip_serializing_if = "Option::is_none")]
-    device: Option<String>,
+    pub device: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema, Validate)]
@@ -71,16 +74,29 @@ pub struct JwtConfig {
 
 impl Default for JwtConfig {
     fn default() -> Self {
-        // In a real application, this would be loaded from environment or configuration
         let secret = "your_jwt_secret_key";
-        let mut validation = Validation::new(Algorithm::HS256);
+        let mut validation = Validation::new(Algorithm::RS256);
         validation.validate_exp = true;
         
         Self {
-            decoding_key: DecodingKey::from_secret(secret.as_bytes()),
+            decoding_key: get_decoding_key().clone(),
             validation,
         }
     }
+}
+
+static DECODING_KEY: OnceLock<DecodingKey> = OnceLock::new();
+
+pub fn get_decoding_key() -> &'static DecodingKey {
+    DECODING_KEY.get_or_init(|| {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("../public_key.pem");
+
+        let public_key = fs::read_to_string(&path)
+            .unwrap_or_else(|_| panic!("Failed to read public key file: {:?}", path));
+        DecodingKey::from_rsa_pem(public_key.as_bytes())
+            .expect("Failed to create decoding key")
+    })
 }
 
 /// Verifies JWT token and extracts claims
@@ -240,7 +256,6 @@ async fn store_token_handler<R: TokenRepository + 'static>(
 ) -> Result<impl Responder, AppError> {
     let req = req.into_inner();
     
-    // Validate request
     validate_request(&req)?;
     
     controller.store_token(req).await?;
@@ -264,7 +279,6 @@ async fn validate_token_handler<R: TokenRepository + 'static>(
 ) -> Result<impl Responder, AppError> {
     let req = req.into_inner();
     
-    // Validate request
     validate_request(&req)?;
     
     let is_valid = controller.validate_token(req).await?;
@@ -288,7 +302,6 @@ async fn revoke_token_handler<R: TokenRepository + 'static>(
 ) -> Result<impl Responder, AppError> {
     let req = req.into_inner();
     
-    // Validate request
     validate_request(&req)?;
     
     controller.revoke_token(req).await?;
@@ -302,6 +315,23 @@ mod tests {
     use mockall::predicate::*;
     use service::token::repository::MockTokenRepository;
     use jsonwebtoken::{encode, EncodingKey, Header};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+
+    static ENCODING_KEY: OnceLock<EncodingKey> = OnceLock::new();
+
+    fn get_encoding_key() -> &'static EncodingKey {
+        ENCODING_KEY.get_or_init(|| {
+            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            path.push("../private_key.pem");
+
+            let private_key = fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("Failed to read private key file: {:?}", path));
+            EncodingKey::from_rsa_pem(private_key.as_bytes())
+                .expect("Failed to create encoding key")
+        })
+    }
 
     fn create_test_jwt(user_id: &Uuid, expires_in_secs: i64, device_info: Option<String>) -> String {
         let now = SystemTime::now()
@@ -317,9 +347,9 @@ mod tests {
         };
         
         encode(
-            &Header::default(),
+            &Header::new(Algorithm::RS256),
             &claims,
-            &EncodingKey::from_secret("your_jwt_secret_key".as_bytes())
+            &get_encoding_key().clone()
         ).unwrap()
     }
 

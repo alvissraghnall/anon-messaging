@@ -3,3 +3,4 @@
 *.db-*
 tarpaulin-report.html
 *.txt
+*.pem
