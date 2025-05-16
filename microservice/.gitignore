@@ -1,3 +1,6 @@
 .env*
 *.db
 *.db-*
+tarpaulin-report.html
+*.txt
+*.pem

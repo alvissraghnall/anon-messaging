@@ -1,16 +1,19 @@
 
-CREATE TABLE encrypted_messages (
-    id SERIAL PRIMARY KEY,
+CREATE TABLE messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     sender_id TEXT NOT NULL,
     recipient_id TEXT NOT NULL,
-    encrypted_message TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    encrypted_content TEXT NOT NULL,
+    parent_id INTEGER,
+    signature TEXT,
+    is_read INTEGER DEFAULT 0 NOT NULL,
+    created_at INTEGER NOT NULL,
     CONSTRAINT fk_sender
         FOREIGN KEY (sender_id)
-        REFERENCES users(user_id)
+        REFERENCES users(id)
         ON DELETE CASCADE,
     CONSTRAINT fk_recipient
         FOREIGN KEY (recipient_id)
-        REFERENCES users(user_id)
+        REFERENCES users(id)
         ON DELETE CASCADE
 );
