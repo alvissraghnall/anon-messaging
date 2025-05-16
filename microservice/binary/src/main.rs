@@ -15,6 +15,21 @@ use api::message::{
     MessageController,
     MessageControllerImpl
 };
+use utoipauto::utoipauto;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[utoipauto(
+    paths = "./api/src/ from api",
+    schemas = "./shared/src/ from shared"
+)]
+#[derive(OpenApi)]
+#[openapi(
+    tags(
+        (name = "anon", description = "Anon messaging endpoints.")
+    )
+)]
+pub struct ApiDoc;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -44,6 +59,10 @@ async fn main() -> std::io::Result<()> {
             .configure(configure_message_routes)
             .configure(configure_user_routes)
             .configure(TokenControllerImpl::configure(token_repo))
+            .service(
+                SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-docs/openapi.json", ApiDoc::openapi()),
+            )
 //            .route("/generate-keys", web::post().to(generate_keys))
     })
     .bind(("127.0.0.1", 8080))?
