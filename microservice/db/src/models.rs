@@ -72,3 +72,13 @@ pub struct Message {
     pub created_at: DateTime<Utc>,
     pub is_read: bool,
 }
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+struct AnonMapping {
+    #[serde(with = "uuid::serde::simple")]
+    anon_id: Uuid,
+    #[serde(with = "uuid::serde::simple")]
+    user_id: Uuid,
+    created_at: i64,
+    expires_at: i64,
+}

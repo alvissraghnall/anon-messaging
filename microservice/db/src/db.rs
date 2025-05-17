@@ -253,40 +253,50 @@ pub async fn update_user(
 
 pub async fn create_anon_mapping(
     pool: &SqlitePool,
-    anon_id: &str,
+    anon_id: Uuid,
     user_id: Uuid,
     ttl_seconds: i64,
 ) -> Result<(), Error> {
     let now = Utc::now().timestamp();
-    sqlx::query!(
-        r#"
-        INSERT INTO anon_mappings (anon_id, user_id, created_at, expires_at)
-        VALUES ($1, $2, $3, $4)
-        "#,
-        anon_id,
-        user_id.to_string(),
-        now,
-        now + ttl_seconds,
+    let query = sqlx::query(
+        "INSERT INTO anon_mappings (anon_id, user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)",
     )
-    .execute(pool)
-    .await?;
+    .bind(anon_id)
+    .bind(user_id)
+    .bind(now)
+    .bind(now + ttl_seconds);
+    query.execute(pool).await?;
     Ok(())
 }
 
-pub async fn resolve_anon_id(pool: &SqlitePool, anon_id: &str) -> Result<Option<Uuid>, Error> {
+pub async fn resolve_anon_id(pool: &SqlitePool, anon_id: Uuid) -> Result<Option<Uuid>, Error> {
     let now = Utc::now().timestamp();
-    let record = sqlx::query!(
+    let query = 
+		sqlx::query("SELECT user_id FROM anon_mappings WHERE anon_id = $1 AND expires_at > $2")
+        	.bind(anon_id)
+	        .bind(now);
+    let row = query.fetch_optional(pool).await?;
+
+	if let Some(row) = row {
+        let user_id: Uuid = row.try_get("user_id")?;
+        Ok(Some(user_id))
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn cleanup_expired_mappings(pool: &SqlitePool) -> Result<u64, Error> {
+    let now = Utc::now().timestamp();
+    let result = sqlx::query!(
         r#"
-        SELECT user_id FROM anon_mappings
-        WHERE anon_id = $1 AND expires_at > $2
+        DELETE FROM anon_mappings WHERE expires_at <= $1
         "#,
-        anon_id,
         now
     )
-    .fetch_optional(pool)
+    .execute(pool)
     .await?;
-
-    Ok(record.and_then(|r| Uuid::parse_str(&r.user_id).ok()))
+    
+    Ok(result.rows_affected())
 }
 
 pub async fn create_message(
