@@ -4,12 +4,16 @@
   import { flip } from "svelte/animate";
   import { fly, fade, slide,  } from 'svelte/transition';
   import { spring, } from 'svelte/motion';
-  import { Icon, IconName } from '$lib';
-  import { darkMode } from '$lib/stores/theme';
+  import { Icon, IconName, IdentityModal, darkMode } from '$lib';
+//  import { darkMode } from '$lib/stores/theme';
 
   let isLoading = false;
   let error = '';
-  let mounted = false;
+  let mounted = $state(false);
+
+  let showModal = $state(false);
+  let modalLoading = $state(false);
+  let modalError = $state('');
 
   const staggerDelay = 150;
 
@@ -17,32 +21,22 @@
     mounted = true;
   });
 
-  async function createNewIdentity() {
-    isLoading = true;
-    error = '';
+  function createNewIdentity() {
+    showModal = true;
+  }
 
-    try {
-      // Call to your Rust microservice to generate keypair
-      const response = await fetch('/api/identity/create', {
-        method: 'POST',
-      });
+  function handleConfirm(username: string) {
+    modalLoading = true;
+    console.log("Creating identity for:", username || "Anonymous");
 
-      if (!response.ok) {
-        throw new Error('Failed to create identity');
-      }
+    setTimeout(() => {
+      modalLoading = false;
+      showModal = false;
+    }, 2000);
+  }
 
-      const data = await response.json();
-
-      localStorage.setItem('privateKey', data.privateKey);
-      localStorage.setItem('publicKey', data.publicKey);
-
-      // Navigate to the dashboard
-      goto('/dashboard');
-    } catch (err) {
-      error = err instanceof Error ? err.message : 'Something went wrong';
-    } finally {
-      isLoading = false;
-    }
+  function handleCancel() {
+    showModal = false;
   }
 </script>
 
@@ -85,6 +79,13 @@
         {/if}
       </div>
     {/if}
+
+    <IdentityModal
+      show={showModal}
+      isLoading={modalLoading}
+      onConfirm={handleConfirm}
+      onCancel={handleCancel}
+    />
 
     {#if mounted}
   <div class="max-w-4xl mx-auto mb-24"
