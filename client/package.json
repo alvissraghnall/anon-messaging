@@ -4,9 +4,9 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "bun run generate-sprites && vite dev",
-		"build": "bun run generate-sprites && vite build",
-		"generate-sprites": "bun scripts/generate-sprites",
+		"dev": "pnpm run generate-sprites && vite dev",
+		"build": "pnpm run generate-sprites && vite build",
+		"generate-sprites": "pnpm exec tsx scripts/generate-sprites",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -14,7 +14,7 @@
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint .",
 		"test:unit": "vitest",
-		"test": "bun run test:unit -- --run && bun run test:e2e",
+		"test": "pnpm run test:unit -- --run && pnpm run test:e2e",
 		"test:e2e": "playwright test"
 	},
 	"devDependencies": {
@@ -32,11 +32,14 @@
 		"@testing-library/svelte": "^5.2.7",
 		"@types/bun": "^1.2.13",
 		"@types/glob": "^8.1.0",
+		"@types/node": "^22.15.19",
 		"@types/node-forge": "^1.3.11",
 		"@types/svg-sprite": "^0.0.39",
+		"bun-types": "^1.2.13",
 		"eslint": "^9.26.0",
 		"eslint-config-prettier": "^10.1.5",
 		"eslint-plugin-svelte": "^3.6.0",
+		"glob": "^11.0.2",
 		"globals": "^16.1.0",
 		"jsdom": "^26.1.0",
 		"prettier": "^3.5.3",
@@ -46,14 +49,18 @@
 		"svelte-check": "^4.2.1",
 		"svg-sprite": "^2.0.4",
 		"tailwindcss": "^4.1.7",
+		"tsx": "^4.19.4",
 		"typescript": "^5.8.3",
 		"typescript-eslint": "^8.32.1",
 		"vite": "^6.3.5",
-		"vitest": "^3.1.3"
+		"vitest": "^3.1.4"
 	},
 	"dependencies": {
 		"@hey-api/client-fetch": "^0.10.1",
-		"@rollup/rollup-android-arm64": "^4.40.2",
+		"@types/better-sqlite3": "^7.6.13",
+		"better-sqlite3": "^11.10.0",
+		"kysely": "^0.28.2",
+		"kysely-bun-sqlite": "^0.4.0",
 		"nanostores": "^1.0.1",
 		"node-forge": "^1.3.1"
 	}
