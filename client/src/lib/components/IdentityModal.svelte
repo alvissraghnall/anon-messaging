@@ -2,6 +2,7 @@
   import { fade, scale } from "svelte/transition";
   let { show, isLoading, onConfirm, onCancel } = $props();
   let username = $state('');
+  let password = $state('');
 
   function preventDefaultAndStopPropagation<T extends Event>(fn: ((this: HTMLElement, event: T) => void) | null) {
 		return function (this: HTMLElement, event: T) {
@@ -35,13 +36,19 @@
     >
       <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create New Identity</h2>
       <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">
-        A secure key pair will be generated for you. No password is needed. You may enter an optional username.
+        A secure key pair will be generated for you. You may enter an optional username but a secure password.
       </p>
       <input
         type="text"
         placeholder="Optional Username"
         class="w-full px-4 py-2 mb-4 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
         bind:value={username}
+      />
+      <input
+        type="text"
+        placeholder="Password"
+        class="w-full px-4 py-2 mb-4 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+        bind:value={password}
       />
       <div class="flex justify-end space-x-2">
         <button
@@ -53,7 +60,7 @@
         </button>
         <button
           class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-          onclick={() => onConfirm?.(username)}
+          onclick={() => onConfirm?.(username, password)}
           disabled={isLoading}
         >
           {#if isLoading}

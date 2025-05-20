@@ -10,7 +10,7 @@ export async function encryptMessage (
 
     const cipher = forge.cipher.createCipher('AES-GCM', aesKey);
     cipher.start({ iv: iv });
-	cipher.update(forge.util.createBuffer(forge.util.encodeUtf8(message)));
+  	cipher.update(forge.util.createBuffer(forge.util.encodeUtf8(message)));
     cipher.finish();
 
     const ciphertext = cipher.output.getBytes();

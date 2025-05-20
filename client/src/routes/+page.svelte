@@ -5,7 +5,8 @@
   import { fly, fade, slide,  } from 'svelte/transition';
   import { spring, } from 'svelte/motion';
   import { Icon, IconName, IdentityModal, darkMode } from '$lib';
-//  import { darkMode } from '$lib/stores/theme';
+	import { generateRSAKeyPair } from '$lib/utils/rsa-keygen';
+  import * as forge from "node-forge";
 
   let isLoading = false;
   let error = '';
@@ -25,9 +26,14 @@
     showModal = true;
   }
 
-  function handleConfirm(username: string) {
+  async function handleConfirm(username: string, password: string) {
     modalLoading = true;
     console.log("Creating identity for:", username || "Anonymous");
+
+    let kp = await generateRSAKeyPair();
+
+    let priv = forge.pki.privateKeyToPem(kp.privateKey);
+    let pub = forge.pki.publicKeyToPem(kp.publicKey);
 
     setTimeout(() => {
       modalLoading = false;
