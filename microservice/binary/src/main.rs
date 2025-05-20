@@ -40,6 +40,10 @@ async fn main() -> std::io::Result<()> {
         .await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
+    sqlx::migrate!("../db/migrations")
+        .run(&pool)
+        .await?;
+
     let user_service = UserService::new(pool.clone());
     let user_controller: Arc<dyn UserController> = Arc::new(UserControllerImpl::new(web::Data::new(user_service)));
 
@@ -63,9 +67,14 @@ async fn main() -> std::io::Result<()> {
                 SwaggerUi::new("/swagger-ui/{_:.*}")
                     .url("/api-docs/openapi.json", ApiDoc::openapi()),
             )
+            .route("/healthz", web::get().to(health_check))
 //            .route("/generate-keys", web::post().to(generate_keys))
     })
     .bind(("127.0.0.1", 8080))?
     .run()
     .await
+}
+
+async fn health_check() -> impl Responder {
+    HttpResponse::Ok().body("OK")
 }
