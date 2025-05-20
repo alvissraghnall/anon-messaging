@@ -1,0 +1,6 @@
+let user_repo = UserRepositoryImpl::new(); 
+let user_service = UserService::new(user_repo);
+let controller_impl = UserControllerImpl::new(Data::new(user_service));
+let controller_arc: Arc<dyn UserController> = Arc::new(controller_impl);
+let controller_data = Data::new(controller_arc);
+

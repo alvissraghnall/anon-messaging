@@ -1,2 +1,4 @@
-pub mod key_generation;
+pub mod crypto;
 pub mod data_encryption;
+pub mod errors;
+pub mod models;
