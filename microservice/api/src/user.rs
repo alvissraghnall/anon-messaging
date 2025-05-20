@@ -10,7 +10,7 @@ use shared::{
     models::{RegisterRequest, RegisterResponse, UpdateUserRequest},
 };
 use std::sync::Arc;
-use serde::{Deserialize};
+use serde::{Deserialize, Serialize};
 use actix_web::{
     delete, get, patch, post,
     web::{self, Data, Json, Path, Query},
@@ -18,12 +18,31 @@ use actix_web::{
 };
 use utoipa::ToSchema;
 use validator::Validate;
+use std::collections::HashMap;
+
 
 pub type RegisterUserResponse = Result<HttpResponse, AppError>;
 pub type GetUserResponse = Result<HttpResponse, AppError>;
 pub type GetUsersResponse = Result<HttpResponse, AppError>;
 pub type UpdateUserResponse = Result<HttpResponse, AppError>;
 pub type DeleteUserResponse = Result<HttpResponse, AppError>;
+
+
+/// A single field validation error
+#[derive(Serialize, ToSchema)]
+pub struct FieldValidationErrorDoc {
+    /// The validation code (e.g., "length", "email")
+    pub code: String,
+    /// Optional human-readable message
+    pub message: Option<String>,
+}
+
+/// Error response returned when validation fails
+#[derive(Serialize, ToSchema)]
+pub struct ValidationErrorResponseDoc {
+    /// A map of field names to their validation errors
+    pub errors: HashMap<String, Vec<FieldValidationErrorDoc>>,
+}
 
 #[derive(Deserialize)]
 struct GetUsersQuery {
@@ -114,7 +133,7 @@ impl<R: UserRepository + 'static> UserController for UserControllerImpl<R> {
     request_body(content = RegisterRequest, content_type = "application/json"),
     responses(
         (status = 201, description = "User registered successfully", body = RegisterResponse),
-        (status = 400, description = "Validation error"),
+        (status = 400, description = "Validation error", body = ValidationErrorResponseDoc),
         (status = 409, description = "Username or public key already exists"),
         (status = 500, description = "Internal server error"),
     )

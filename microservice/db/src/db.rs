@@ -255,17 +255,22 @@ pub async fn create_anon_mapping(
     pool: &SqlitePool,
     anon_id: Uuid,
     user_id: Uuid,
+    thread_id: i64,  // Message ID that starts the thread
     ttl_seconds: i64,
 ) -> Result<(), Error> {
     let now = Utc::now().timestamp();
-    let query = sqlx::query(
-        "INSERT INTO anon_mappings (anon_id, user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)",
+    sqlx::query(
+        r#"INSERT INTO anon_mappings 
+         (anon_id, user_id, thread_id, created_at, expires_at) 
+         VALUES ($1, $2, $3, $4, $5)"#
     )
     .bind(anon_id)
     .bind(user_id)
+    .bind(thread_id)
     .bind(now)
-    .bind(now + ttl_seconds);
-    query.execute(pool).await?;
+    .bind(now + ttl_seconds)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -297,6 +302,23 @@ pub async fn cleanup_expired_mappings(pool: &SqlitePool) -> Result<u64, Error> {
     .await?;
     
     Ok(result.rows_affected())
+}
+
+pub async fn resolve_anon_id_for_thread(
+    pool: &SqlitePool,
+    anon_id: Uuid,
+    thread_id: i64,  //to pinpoint the exact mapping
+) -> Result<Option<Uuid>, Error> {
+    let now = Utc::now().timestamp();
+    sqlx::query_scalar(
+        r#"SELECT user_id FROM anon_mappings 
+         WHERE anon_id = $1 AND thread_id = $2 AND expires_at > $3"#
+    )
+    .bind(anon_id)
+    .bind(thread_id)
+    .bind(now)
+    .fetch_optional(pool)
+    .await
 }
 
 pub async fn create_message(
