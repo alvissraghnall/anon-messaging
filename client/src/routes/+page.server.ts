@@ -5,28 +5,39 @@ import { SERVICE_URL } from '$env/static/private';
 //import { registerUserHandler } from '$lib/server/requests';
 import { z } from 'zod';
 
-
 type ValidationError = {
-  code: string;
-  message?: string;
-  params: {
-    [key: string]: any;
-    path?: string;
-  };
+	code: string;
+	message?: string;
+	params: {
+		[key: string]: any;
+		path?: string;
+	};
 };
 
 type ValidationErrorsKind =
-  | { kind: "Field"; Field: ValidationError[] }
-  | { kind: "Struct"; Struct: Record<string, unknown> }
-  | { kind: "List"; List: Record<number, unknown> }; 
+	| { kind: 'Field'; Field: ValidationError[] }
+	| { kind: 'Struct'; Struct: Record<string, unknown> }
+	| { kind: 'List'; List: Record<number, unknown> };
 
-let userSchema = z.object({
-	public_key: z.string().base64url(),
-	username: z.string().trim().min(1),
-})
+const userSchema = z.object({
+  public_key: z.string({
+    required_error: 'Public key is required',
+    invalid_type_error: 'Public key must be a string',
+  }).base64url({ message: 'Public key must be a valid base64url string' }),
+
+  username: z.string({
+    required_error: 'Username is required',
+    invalid_type_error: 'Username must be a string',
+  }).trim().min(1, { message: 'Username cannot be empty' }),
+
+  password: z.string({
+    required_error: 'Password is required',
+    invalid_type_error: 'Password must be a string',
+  }).min(8, { message: 'Password must be at least 8 characters long' }),
+});
 
 let userRepo = new UserRepository(db);
- 
+
 /*
 export const load: PageServerLoad = async ({ cookies }) => {
 	const user = await userRepo.getUserById(cookies.get('sessionid') ?? '');
@@ -35,7 +46,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 */
 
 export const load: PageServerLoad = async ({ fetch, params }) => {
-	const res = await fetch(`https://eerip.onrender.com/api/users`); 
+	const res = await fetch(`https://eerip.onrender.com/api/users`);
 	const items = await res.json();
 	console.log(items);
 
@@ -45,59 +56,61 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
 export const actions = {
 	default: async ({ request, cookies }) => {
 		console.log('there');
-    
-    const data = await request.formData();
-    const publicKey = data.get('public_key');
-    const username = data.get('username');
-    const password = data.get('password');
-    
-	const formDataObject = Object.fromEntries(data);
-    const userData = userSchema.safeParse(formDataObject);
 
-    if (!userData.success) {
-		  const errors = userData.error.errors.map((error) => {
-		    return {
-		      field: error.path[0],
-		      message: error.message
-		    };
-		  });
+		const data = await request.formData();
+		const publicKey = data.get('public_key');
+		const username = data.get('username');
+		const password = data.get('password');
 
-		  return fail(400, { error: true, errors });
+		const formDataObject = Object.fromEntries(data);
+		console.log(formDataObject);
+		const userData = userSchema.safeParse(formDataObject);
+
+		if (!userData.success) {
+			console.log(userData.error);
+			const errors = userData.error.errors.map((error) => {
+				return {
+					field: error.path[0],
+					message: error.message
+				};
+			});
+
+			return fail(400, { error: true, errors });
 		}
-		
-    let { data: responseData, error } = await registerUserHandler({
-    	body: {
-    		public_key: publicKey as string,
-    		username: username as string
-    	}
-    }) 
 
-	console.log(responseData);
-    console.log(error);
+		let { data: responseData, error } = await registerUserHandler({
+			body: {
+				public_key: publicKey as string,
+				username: username as string
+			}
+		});
 
-    if (error) {
-		  if ((error as any).kind === "Field") {
-		    const fieldErrors = (error as { kind: "Field"; Field: ValidationError[] }).Field;
+		console.log(responseData);
+		console.log(error);
 
-		    const filteredErrors = fieldErrors.filter(
-		      (err) => err.params?.path !== "public_key"
-		    );
+		if (error) {
+			if ((error as any).kind === 'Field') {
+				const fieldErrors = (error as { kind: 'Field'; Field: ValidationError[] }).Field;
 
-		    const formattedErrors = filteredErrors.reduce((acc, err) => {
-		      const fieldName = err.params?.path || "unknown";
-		      acc[fieldName] = err.message || err.code;
-		      return acc;
-		    }, {} as Record<string, string>);
+				const filteredErrors = fieldErrors.filter((err) => err.params?.path !== 'public_key');
 
-		    return fail(400, { errors: formattedErrors });
-		  }
+				const formattedErrors = filteredErrors.reduce(
+					(acc, err) => {
+						const fieldName = err.params?.path || 'unknown';
+						acc[fieldName] = err.message || err.code;
+						return acc;
+					},
+					{} as Record<string, string>
+				);
 
-		  return fail(500, { message: "Unexpected error structure" });
+				return fail(400, { errors: formattedErrors });
+			}
+
+			return fail(500, { message: 'Unexpected error structure' });
 		}
-    
+
 		// const createdUser = await fetch(`${SERVICE_URL}/`)
-		
-	  // let user = userRepo.createUser('', '', '');
-	  
- 	}
+
+		// let user = userRepo.createUser('', '', '');
+	}
 } satisfies Actions;

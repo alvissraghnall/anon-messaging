@@ -1,10 +1,10 @@
-import type { PageLoad } from "./$types";
+import type { PageLoad } from './$types';
 
 export const load: PageLoad = ({ url }) => {
-    return {
-        email: `info@${url.origin}`,
+	return {
+		email: `info@${url.origin}`,
 		pageUrl: url.origin
-    }
-}
+	};
+};
 
-export const ssr = true
+export const ssr = true;

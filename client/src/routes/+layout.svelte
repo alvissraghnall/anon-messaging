@@ -1,17 +1,16 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { browser } from '$app/environment';
-  import { Icon, IconName } from '$lib';
-  import '../app.css';
-  import { darkMode, toggleDarkMode, initTheme, loadSprite } from '$lib/stores/theme';
-  
-  let { children } = $props();
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { Icon, IconName } from '$lib';
+	import '../app.css';
+	import { darkMode, toggleDarkMode, initTheme, loadSprite } from '$lib/stores/theme';
 
-  onMount(() => {
-    loadSprite();
-	initTheme();
-  });
+	let { children } = $props();
 
+	onMount(() => {
+		loadSprite();
+		initTheme();
+	});
 </script>
 
 <!-- Header -->
@@ -20,8 +19,11 @@
 >
 	<div class="container mx-auto flex items-center justify-between px-4 py-4">
 		<div class="flex items-center">
-			
-			<Icon name={ IconName.PSEUDOCROWN } size={24} className="mr-2 mb-1 h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+			<Icon
+				name={IconName.PSEUDOCROWN}
+				size={24}
+				className="mr-2 mb-1 h-6 w-6 text-indigo-600 dark:text-indigo-400"
+			/>
 			<a
 				href="/"
 				class="text-xl font-bold text-gray-900 transition-colors duration-300 md:text-2xl dark:text-white"
@@ -58,7 +60,7 @@
 				class="rounded-lg bg-gray-200 p-2 text-gray-800 transition-colors duration-200 hover:cursor-pointer hover:bg-gray-300 focus:ring-2 focus:ring-gray-400 focus:outline-none dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
 				aria-label="Toggle dark mode"
 			>
-				<Icon name={ $darkMode ? IconName.SUNLIGHT : IconName.MOON } size={24} />
+				<Icon name={$darkMode ? IconName.SUNLIGHT : IconName.MOON} size={24} />
 			</button>
 
 			<a

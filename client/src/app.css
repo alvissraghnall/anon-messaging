@@ -5,7 +5,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-ibm: "IBM Plex", "sans-serif";
-    --font-roboto-flex: "Roboto Flex", "serif", "sans-serif";
-    --font-vollkorn: Vollkorn, "sans-serif";
+	--font-ibm: 'IBM Plex', 'sans-serif';
+	--font-roboto-flex: 'Roboto Flex', 'serif', 'sans-serif';
+	--font-vollkorn: Vollkorn, 'sans-serif';
 }
