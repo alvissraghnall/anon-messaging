@@ -59,11 +59,11 @@
 			</p>
 
 			{#if form?.error}
-			  <ul class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded my-4">
-			    {#each form.errors as error}
-			      <li class="list-disc list-inside">{error.message}</li>
-			    {/each}
-			  </ul>
+				<ul class="my-4 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">
+					{#each form.errors as error}
+						<li class="list-inside list-disc">{error.message}</li>
+					{/each}
+				</ul>
 			{/if}
 
 			<form method="POST" use:enhance={handleSubmit}>
@@ -107,7 +107,6 @@
 						{/if}
 					</button>
 				</div>
-
 			</form>
 		</div>
 	</div>

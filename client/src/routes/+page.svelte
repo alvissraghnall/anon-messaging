@@ -118,7 +118,7 @@
 		return async ({ result, formData, update }) => {
 			formData = newFormData;
 			console.log(formData);
-			
+
 			if (result.type === 'success') {
 				formStatus.set(FormState.SUCCESS);
 
@@ -145,7 +145,6 @@
 				}
 			}
 			applyAction(result);
-			
 		};
 	};
 
@@ -218,7 +217,7 @@
 			{username}
 			{password}
 			handleSubmit={handleEnhancedSubmit}
-			form={form}
+			{form}
 		/>
 
 		{#if mounted}

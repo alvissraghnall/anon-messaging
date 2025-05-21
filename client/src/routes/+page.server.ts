@@ -20,20 +20,27 @@ type ValidationErrorsKind =
 	| { kind: 'List'; List: Record<number, unknown> };
 
 const userSchema = z.object({
-  public_key: z.string({
-    required_error: 'Public key is required',
-    invalid_type_error: 'Public key must be a string',
-  }).base64url({ message: 'Public key must be a valid base64url string' }),
+	public_key: z
+		.string({
+			required_error: 'Public key is required',
+			invalid_type_error: 'Public key must be a string'
+		})
+		.base64url({ message: 'Public key must be a valid base64url string' }),
 
-  username: z.string({
-    required_error: 'Username is required',
-    invalid_type_error: 'Username must be a string',
-  }).trim().min(1, { message: 'Username cannot be empty' }),
+	username: z
+		.string({
+			required_error: 'Username is required',
+			invalid_type_error: 'Username must be a string'
+		})
+		.trim()
+		.min(1, { message: 'Username cannot be empty' }),
 
-  password: z.string({
-    required_error: 'Password is required',
-    invalid_type_error: 'Password must be a string',
-  }).min(8, { message: 'Password must be at least 8 characters long' }),
+	password: z
+		.string({
+			required_error: 'Password is required',
+			invalid_type_error: 'Password must be a string'
+		})
+		.min(8, { message: 'Password must be at least 8 characters long' })
 });
 
 let userRepo = new UserRepository(db);
