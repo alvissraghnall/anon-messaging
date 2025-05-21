@@ -2,7 +2,7 @@
 
 import { type Options, getUsersHandler, registerUserHandler, createMessageHandler, getConversationHandler, getThreadRepliesHandler, getCompleteThreadHandler, getUserThreadsHandler, getMessageHandler, revokeTokenHandler, storeTokenHandler, validateTokenHandler, getUserHandler, updateUserHandler } from '../sdk.gen';
 import { queryOptions, type MutationOptions, type DefaultError, infiniteQueryOptions, type InfiniteData } from '@tanstack/svelte-query';
-import type { GetUsersHandlerData, RegisterUserHandlerData, RegisterUserHandlerResponse, CreateMessageHandlerData, CreateMessageHandlerResponse, GetConversationHandlerData, GetThreadRepliesHandlerData, GetThreadRepliesHandlerResponse, GetCompleteThreadHandlerData, GetUserThreadsHandlerData, GetMessageHandlerData, RevokeTokenHandlerData, StoreTokenHandlerData, ValidateTokenHandlerData, ValidateTokenHandlerResponse, GetUserHandlerData, UpdateUserHandlerData } from '../types.gen';
+import type { GetUsersHandlerData, RegisterUserHandlerData, RegisterUserHandlerError, RegisterUserHandlerResponse, CreateMessageHandlerData, CreateMessageHandlerResponse, GetConversationHandlerData, GetThreadRepliesHandlerData, GetThreadRepliesHandlerResponse, GetCompleteThreadHandlerData, GetUserThreadsHandlerData, GetMessageHandlerData, RevokeTokenHandlerData, StoreTokenHandlerData, ValidateTokenHandlerData, ValidateTokenHandlerResponse, GetUserHandlerData, UpdateUserHandlerData } from '../types.gen';
 import { client as _heyApiClient } from '../client.gen';
 
 export type QueryKey<TOptions extends Options> = [
@@ -70,8 +70,8 @@ export const registerUserHandlerOptions = (options: Options<RegisterUserHandlerD
     });
 };
 
-export const registerUserHandlerMutation = (options?: Partial<Options<RegisterUserHandlerData>>): MutationOptions<RegisterUserHandlerResponse, DefaultError, Options<RegisterUserHandlerData>> => {
-    const mutationOptions: MutationOptions<RegisterUserHandlerResponse, DefaultError, Options<RegisterUserHandlerData>> = {
+export const registerUserHandlerMutation = (options?: Partial<Options<RegisterUserHandlerData>>): MutationOptions<RegisterUserHandlerResponse, RegisterUserHandlerError, Options<RegisterUserHandlerData>> => {
+    const mutationOptions: MutationOptions<RegisterUserHandlerResponse, RegisterUserHandlerError, Options<RegisterUserHandlerData>> = {
         mutationFn: async (localOptions) => {
             const { data } = await registerUserHandler({
                 ...options,

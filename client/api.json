@@ -1,1 +1,863 @@
-{"openapi":"3.1.0","info":{"title":"binary","description":"","license":{"name":""},"version":"0.1.0"},"paths":{"":{"get":{"tags":["api::user"],"operationId":"get_users_handler","parameters":[{"name":"limit","in":"query","description":"Maximum number of users to return","required":false,"schema":{"type":"integer","format":"int64"}}],"responses":{"200":{"description":"List of users","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/User"}}}}},"500":{"description":"Internal server error"}}},"post":{"tags":["api::user"],"operationId":"register_user_handler","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/RegisterRequest"}}},"required":true},"responses":{"201":{"description":"User registered successfully","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RegisterResponse"}}}},"400":{"description":"Validation error"},"409":{"description":"Username or public key already exists"},"500":{"description":"Internal server error"}}}},"/api/messages":{"post":{"tags":["api::message"],"operationId":"create_message_handler","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateMessageRequest"}}},"required":true},"responses":{"201":{"description":"Message created successfully","content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateMessageResponse"}}}},"400":{"description":"Validation error"},"500":{"description":"Internal server error"}}}},"/api/messages/conversations/{user1_id}/{user2_id}":{"get":{"tags":["api::message"],"operationId":"get_conversation_handler","parameters":[{"name":"user1_id","in":"path","description":"First user ID","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"user2_id","in":"path","description":"Second user ID","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"limit","in":"query","description":"Maximum number of messages to return","required":false,"schema":{"type":"integer","format":"int64"}}],"responses":{"200":{"description":"Conversation messages","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/Message"}}}}},"500":{"description":"Internal server error"}}}},"/api/messages/threads/{parent_id}/replies":{"get":{"tags":["api::message"],"operationId":"get_thread_replies_handler","parameters":[{"name":"parent_id","in":"path","description":"Parent message ID","required":true,"schema":{"type":"integer","format":"int64"}},{"name":"limit","in":"query","description":"Maximum number of replies to return","required":false,"schema":{"type":"integer","format":"int64"}},{"name":"offset","in":"query","description":"Number of replies to skip","required":false,"schema":{"type":"integer","format":"int64"}}],"responses":{"200":{"description":"Thread replies","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/Message"}}}}},"500":{"description":"Internal server error"}}}},"/api/messages/threads/{thread_root_id}":{"get":{"tags":["api::message"],"operationId":"get_complete_thread_handler","parameters":[{"name":"thread_root_id","in":"path","description":"Thread root message ID","required":true,"schema":{"type":"integer","format":"int64"}},{"name":"limit","in":"query","description":"Maximum number of messages to return","required":false,"schema":{"type":"integer","format":"int64"}}],"responses":{"200":{"description":"Complete thread","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/Message"}}}}},"500":{"description":"Internal server error"}}}},"/api/messages/users/{user_id}/threads":{"get":{"tags":["api::message"],"operationId":"get_user_threads_handler","parameters":[{"name":"user_id","in":"path","description":"User ID","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"limit","in":"query","description":"Maximum number of threads to return","required":false,"schema":{"type":"integer","format":"int64"}}],"responses":{"200":{"description":"User threads","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/Message"}}}}},"500":{"description":"Internal server error"}}}},"/api/messages/{message_id}":{"get":{"tags":["api::message"],"operationId":"get_message_handler","parameters":[{"name":"message_id","in":"path","description":"Message ID","required":true,"schema":{"type":"integer","format":"int64"}}],"responses":{"200":{"description":"Message found","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Message"}}}},"404":{"description":"Message not found"},"500":{"description":"Internal server error"}}}},"/api/tokens/revoke":{"post":{"tags":["tokens"],"operationId":"revoke_token_handler","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/RevokeTokenRequest"}}},"required":true},"responses":{"200":{"description":"Token revoked successfully"},"400":{"description":"Invalid request"},"500":{"description":"Internal server error"}}}},"/api/tokens/store":{"post":{"tags":["tokens"],"operationId":"store_token_handler","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/StoreTokenRequest"}}},"required":true},"responses":{"201":{"description":"Token stored successfully"},"400":{"description":"Invalid request"},"500":{"description":"Internal server error"}}}},"/api/tokens/validate":{"post":{"tags":["tokens"],"operationId":"validate_token_handler","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ValidateTokenRequest"}}},"required":true},"responses":{"200":{"description":"Token validated","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ValidateTokenResponse"}}}},"400":{"description":"Invalid request"},"500":{"description":"Internal server error"}}}},"/{user_id}":{"get":{"tags":["api::user"],"operationId":"get_user_handler","parameters":[{"name":"user_id","in":"path","description":"User ID","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"User found","content":{"application/json":{"schema":{"$ref":"#/components/schemas/User"}}}},"404":{"description":"User not found"},"500":{"description":"Internal server error"}}},"patch":{"tags":["api::user"],"operationId":"update_user_handler","parameters":[{"name":"user_id","in":"path","description":"User ID","required":true,"schema":{"type":"string","format":"uuid"}}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/UpdateUserRequest"}}},"required":true},"responses":{"200":{"description":"User updated successfully"},"400":{"description":"Validation error"},"404":{"description":"User not found"},"409":{"description":"New username already exists"},"500":{"description":"Internal server error"}}}}},"components":{"schemas":{"CreateMessageRequest":{"type":"object","required":["sender_id","recipient_id","encrypted_content"],"properties":{"encrypted_content":{"type":"string"},"parent_id":{"type":["integer","null"],"format":"int64"},"recipient_id":{"type":"string","format":"uuid"},"sender_id":{"type":"string","format":"uuid"},"signature":{"type":["string","null"]}}},"CreateMessageResponse":{"type":"object","required":["message_id"],"properties":{"message_id":{"type":"integer","format":"int64"}}},"Message":{"type":"object","required":["id","sender_id","recipient_id","encrypted_content","created_at","is_read"],"properties":{"created_at":{"type":"string","format":"date-time"},"encrypted_content":{"type":"string"},"id":{"type":"integer","format":"int64"},"is_read":{"type":"boolean"},"parent_id":{"type":["integer","null"],"format":"int64"},"recipient_id":{"type":"string","format":"uuid"},"sender_id":{"type":"string","format":"uuid"},"signature":{"type":["string","null"]}}},"PublicKey":{"type":"string"},"PublicKeyHash":{"type":"string"},"RegisterRequest":{"type":"object","required":["public_key"],"properties":{"public_key":{"type":"string"},"username":{"type":["string","null"]}}},"RegisterResponse":{"type":"object","required":["user_id","username"],"properties":{"user_id":{"type":"string","format":"uuid"},"username":{"type":"string"}}},"RevokeTokenRequest":{"type":"object","required":["jwt_token"],"properties":{"jwt_token":{"type":"string","description":"JWT token to revoke"},"reason":{"type":["string","null"],"description":"Optional reason for token revocation"}}},"StoreTokenRequest":{"type":"object","required":["jwt_token"],"properties":{"device_info":{"type":["string","null"],"description":"Optional device information associated with this token"},"jwt_token":{"type":"string","description":"JWT token to store"}}},"UpdateUserRequest":{"type":"object","properties":{"new_public_key":{"type":["string","null"]},"new_username":{"type":["string","null"]}}},"User":{"type":"object","required":["id","username","public_key","public_key_hash","created_at","updated_at"],"properties":{"created_at":{"type":"string","format":"date-time"},"id":{"type":"string","format":"uuid"},"last_login":{"type":["string","null"],"format":"date-time"},"public_key":{"$ref":"#/components/schemas/PublicKey"},"public_key_hash":{"$ref":"#/components/schemas/PublicKeyHash"},"updated_at":{"type":"string","format":"date-time"},"username":{"type":"string"}}},"ValidateTokenRequest":{"type":"object","required":["jwt_token"],"properties":{"jwt_token":{"type":"string","description":"JWT token to validate"}}},"ValidateTokenResponse":{"type":"object","required":["valid"],"properties":{"valid":{"type":"boolean","description":"Indicates if the token is valid"}}}}},"tags":[{"name":"anon","description":"Anon messaging endpoints."}]}
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "binary",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "": {
+      "get": {
+        "tags": [
+          "api::user"
+        ],
+        "operationId": "get_users_handler",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of users to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "api::user"
+        ],
+        "operationId": "register_user_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponseDoc"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Username or public key already exists"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/messages": {
+      "post": {
+        "tags": [
+          "api::message"
+        ],
+        "operationId": "create_message_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Message created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateMessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/messages/conversations/{user1_id}/{user2_id}": {
+      "get": {
+        "tags": [
+          "api::message"
+        ],
+        "operationId": "get_conversation_handler",
+        "parameters": [
+          {
+            "name": "user1_id",
+            "in": "path",
+            "description": "First user ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "user2_id",
+            "in": "path",
+            "description": "Second user ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of messages to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversation messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/messages/threads/{parent_id}/replies": {
+      "get": {
+        "tags": [
+          "api::message"
+        ],
+        "operationId": "get_thread_replies_handler",
+        "parameters": [
+          {
+            "name": "parent_id",
+            "in": "path",
+            "description": "Parent message ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of replies to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of replies to skip",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread replies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/messages/threads/{thread_root_id}": {
+      "get": {
+        "tags": [
+          "api::message"
+        ],
+        "operationId": "get_complete_thread_handler",
+        "parameters": [
+          {
+            "name": "thread_root_id",
+            "in": "path",
+            "description": "Thread root message ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of messages to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/messages/users/{user_id}/threads": {
+      "get": {
+        "tags": [
+          "api::message"
+        ],
+        "operationId": "get_user_threads_handler",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of threads to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User threads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/messages/{message_id}": {
+      "get": {
+        "tags": [
+          "api::message"
+        ],
+        "operationId": "get_message_handler",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "Message ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Message not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/tokens/revoke": {
+      "post": {
+        "tags": [
+          "tokens"
+        ],
+        "operationId": "revoke_token_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Token revoked successfully"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/tokens/store": {
+      "post": {
+        "tags": [
+          "tokens"
+        ],
+        "operationId": "store_token_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Token stored successfully"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/tokens/validate": {
+      "post": {
+        "tags": [
+          "tokens"
+        ],
+        "operationId": "validate_token_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Token validated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/{user_id}": {
+      "get": {
+        "tags": [
+          "api::user"
+        ],
+        "operationId": "get_user_handler",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "api::user"
+        ],
+        "operationId": "update_user_handler",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "User updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "User not found"
+          },
+          "409": {
+            "description": "New username already exists"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateMessageRequest": {
+        "type": "object",
+        "required": [
+          "sender_id",
+          "recipient_id",
+          "encrypted_content"
+        ],
+        "properties": {
+          "encrypted_content": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "recipient_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sender_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "signature": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CreateMessageResponse": {
+        "type": "object",
+        "required": [
+          "message_id"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "FieldValidationErrorDoc": {
+        "type": "object",
+        "description": "A single field validation error",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The validation code (e.g., \"length\", \"email\")"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional human-readable message"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": [
+          "id",
+          "sender_id",
+          "recipient_id",
+          "encrypted_content",
+          "created_at",
+          "is_read"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "encrypted_content": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_read": {
+            "type": "boolean"
+          },
+          "parent_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "recipient_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sender_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "signature": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PublicKey": {
+        "type": "string"
+      },
+      "PublicKeyHash": {
+        "type": "string"
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": [
+          "public_key"
+        ],
+        "properties": {
+          "public_key": {
+            "type": "string"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "RegisterResponse": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "username"
+        ],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "RevokeTokenRequest": {
+        "type": "object",
+        "required": [
+          "jwt_token"
+        ],
+        "properties": {
+          "jwt_token": {
+            "type": "string",
+            "description": "JWT token to revoke"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional reason for token revocation"
+          }
+        }
+      },
+      "StoreTokenRequest": {
+        "type": "object",
+        "required": [
+          "jwt_token"
+        ],
+        "properties": {
+          "device_info": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional device information associated with this token"
+          },
+          "jwt_token": {
+            "type": "string",
+            "description": "JWT token to store"
+          }
+        }
+      },
+      "UpdateUserRequest": {
+        "type": "object",
+        "properties": {
+          "new_public_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "new_username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "public_key",
+          "public_key_hash",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "last_login": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "public_key": {
+            "$ref": "#/components/schemas/PublicKey"
+          },
+          "public_key_hash": {
+            "$ref": "#/components/schemas/PublicKeyHash"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "ValidateTokenRequest": {
+        "type": "object",
+        "required": [
+          "jwt_token"
+        ],
+        "properties": {
+          "jwt_token": {
+            "type": "string",
+            "description": "JWT token to validate"
+          }
+        }
+      },
+      "ValidateTokenResponse": {
+        "type": "object",
+        "required": [
+          "valid"
+        ],
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "description": "Indicates if the token is valid"
+          }
+        }
+      },
+      "ValidationErrorResponseDoc": {
+        "type": "object",
+        "description": "Error response returned when validation fails",
+        "required": [
+          "errors"
+        ],
+        "properties": {
+          "errors": {
+            "type": "object",
+            "description": "A map of field names to their validation errors",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/FieldValidationErrorDoc"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "anon",
+      "description": "Anon messaging endpoints."
+    }
+  ]
+}

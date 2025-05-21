@@ -20,6 +20,14 @@ export const zCreateMessageResponse = z.object({
     message_id: z.coerce.bigint()
 });
 
+export const zFieldValidationErrorDoc = z.object({
+    code: z.string(),
+    message: z.union([
+        z.string(),
+        z.null()
+    ]).optional()
+});
+
 export const zMessage = z.object({
     created_at: z.string().datetime(),
     encrypted_content: z.string(),
@@ -100,6 +108,10 @@ export const zValidateTokenRequest = z.object({
 
 export const zValidateTokenResponse = z.object({
     valid: z.boolean()
+});
+
+export const zValidationErrorResponseDoc = z.object({
+    errors: z.object({})
 });
 
 export const zGetUsersHandlerResponse = z.array(zUser);

@@ -1,7 +1,7 @@
 import { defaultPlugins } from '@hey-api/openapi-ts';
 
 export default {
-  input: './api.json',
+  input: 'https://eerip.onrender.com/api-docs/openapi.json',
   output: 'src/lib/server/requests',
   plugins: [
     ...defaultPlugins,

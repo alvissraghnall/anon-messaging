@@ -7,6 +7,9 @@
   import { Icon, IconName, IdentityModal, darkMode } from '$lib';
 	import { generateRSAKeyPair } from '$lib/utils/rsa-keygen';
   import * as forge from "node-forge";
+	import type { SubmitFunction } from './$types';
+	import { writable } from 'svelte/store';
+	import { base64ToUrlSafe } from '$lib/utils/base64-to-url-safe';
 
   let isLoading = false;
   let error = '';
@@ -15,6 +18,8 @@
   let showModal = $state(false);
   let modalLoading = $state(false);
   let modalError = $state('');
+  let username = $state(''); 
+  let password = $state('');
 
   const staggerDelay = 150;
 
@@ -22,18 +27,121 @@
     mounted = true;
   });
 
+  function publicKeyToUrlSafeBase64(publicKey: forge.pki.PublicKey) {
+    const pem = forge.pki.publicKeyToPem(publicKey);
+  
+    // Strip PEM headers/footers and newlines
+    const base64 = pem
+      .replace('-----BEGIN PUBLIC KEY-----', '')
+      .replace('-----END PUBLIC KEY-----', '')
+      .replace(/\r?\n|\r/g, '');
+
+    // Convert to URL-safe Base64
+    const urlSafeBase64 = base64
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    return urlSafeBase64;
+  }
+
+  function urlSafeBase64ToPublicKey(urlSafeBase64: string) {
+    // Convert back to standard Base64
+    let base64 = urlSafeBase64
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+    // Add padding if needed
+    const padding = base64.length % 4;
+    if (padding > 0) {
+      base64 += '='.repeat(4 - padding);
+    }
+
+    // Reconstruct PEM format
+    const pem = `-----BEGIN PUBLIC KEY-----\n${base64.match(/.{1,64}/g)?.join('\n')}\n-----END PUBLIC KEY-----`;
+
+    // Parse to forge public key object
+    return forge.pki.publicKeyFromPem(pem);
+  }
+
   function createNewIdentity() {
     showModal = true;
+  }
+
+  enum FormState {
+    IDLE = 'idle',
+    SUBMITTING = 'submitting',
+    SUCCESS = 'success',
+    ERROR = 'error',
+    VALIDATION_ERROR = 'validation_error'
+  }
+
+  export const formStatus = writable<FormState>(FormState.IDLE);
+  export const formErrors = writable({});
+  export const generalError = writable('');
+
+  export const handleEnhancedSubmit: SubmitFunction = async ({ formElement, formData, action, cancel, submitter }) => {
+    console.log('submitting');
+    // Reset errors and set submitting state
+    formStatus.set(FormState.SUBMITTING);
+    formErrors.set({});
+    generalError.set('');
+  
+    try {
+      const kp = await generateRSAKeyPair();
+      const priv = forge.pki.privateKeyToPem(kp.privateKey);
+      const pubPem = forge.pki.publicKeyToPem(kp.publicKey);
+      const pubB64 = publicKeyToUrlSafeBase64(kp.publicKey)
+    
+      const newFormData = new FormData();
+      newFormData.set('username', username);
+      newFormData.set('password', password);
+      newFormData.set('publicKey', pubPem);
+    
+      // Store private key for later use
+      sessionStorage.setItem('privateKey', priv);
+    
+      // Use the new FormData with added public key
+      formData = newFormData;
+    } catch (error) {
+      formStatus.set(FormState.ERROR);
+      generalError.set('Failed to generate security keys. Please try again.');
+      cancel();
+      return;
+    }
+  
+    return async ({ result }) => {
+      if (result.type === 'success') {
+        formStatus.set(FormState.SUCCESS);
+      
+        const { data }: any = result;
+      
+        if (data?.token) {
+          localStorage.setItem('authToken', data.token);
+        }
+        
+        if (data?.redirect) {
+          await goto(data.redirect);
+        } else {
+          await goto('/dashboard');
+        }
+      } else if (result.type === 'error') {
+        formStatus.set(FormState.ERROR);
+        generalError.set(result.error?.message || 'An error occurred during submission');
+      } else if (result.type === 'failure') {
+        formStatus.set(FormState.VALIDATION_ERROR);
+      
+        const { data } = result;
+        if (data) {
+          formErrors.set(data);
+        }
+      }
+    };
   }
 
   async function handleConfirm(username: string, password: string) {
     modalLoading = true;
     console.log("Creating identity for:", username || "Anonymous");
-
-    let kp = await generateRSAKeyPair();
-
-    let priv = forge.pki.privateKeyToPem(kp.privateKey);
-    let pub = forge.pki.publicKeyToPem(kp.publicKey);
 
     setTimeout(() => {
       modalLoading = false;
@@ -91,6 +199,9 @@
       isLoading={modalLoading}
       onConfirm={handleConfirm}
       onCancel={handleCancel}
+      {username}
+      {password}
+      handleSubmit={handleEnhancedSubmit}
     />
 
     {#if mounted}

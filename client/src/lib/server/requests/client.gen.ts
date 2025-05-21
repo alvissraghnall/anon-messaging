@@ -14,4 +14,6 @@ import { createClientConfig } from '../client';
  */
 export type CreateClientConfig<T extends DefaultClientOptions = ClientOptions> = (override?: Config<DefaultClientOptions & T>) => Config<Required<DefaultClientOptions> & T>;
 
-export const client = createClient(createClientConfig(createConfig<ClientOptions>()));
+export const client = createClient(createClientConfig(createConfig<ClientOptions>({
+    baseUrl: 'https://eerip.onrender.com'
+})));

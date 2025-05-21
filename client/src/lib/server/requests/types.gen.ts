@@ -12,6 +12,20 @@ export type CreateMessageResponse = {
     message_id: number;
 };
 
+/**
+ * A single field validation error
+ */
+export type FieldValidationErrorDoc = {
+    /**
+     * The validation code (e.g., "length", "email")
+     */
+    code: string;
+    /**
+     * Optional human-readable message
+     */
+    message?: string | null;
+};
+
 export type Message = {
     created_at: string;
     encrypted_content: string;
@@ -88,6 +102,18 @@ export type ValidateTokenResponse = {
     valid: boolean;
 };
 
+/**
+ * Error response returned when validation fails
+ */
+export type ValidationErrorResponseDoc = {
+    /**
+     * A map of field names to their validation errors
+     */
+    errors: {
+        [key: string]: Array<FieldValidationErrorDoc>;
+    };
+};
+
 export type GetUsersHandlerData = {
     body?: never;
     path?: never;
@@ -127,7 +153,7 @@ export type RegisterUserHandlerErrors = {
     /**
      * Validation error
      */
-    400: unknown;
+    400: ValidationErrorResponseDoc;
     /**
      * Username or public key already exists
      */
@@ -137,6 +163,8 @@ export type RegisterUserHandlerErrors = {
      */
     500: unknown;
 };
+
+export type RegisterUserHandlerError = RegisterUserHandlerErrors[keyof RegisterUserHandlerErrors];
 
 export type RegisterUserHandlerResponses = {
     /**
@@ -494,5 +522,5 @@ export type UpdateUserHandlerResponses = {
 };
 
 export type ClientOptions = {
-    baseUrl: `${string}://${string}` | (string & {});
+    baseUrl: 'https://eerip.onrender.com' | (string & {});
 };
