@@ -42,7 +42,7 @@ async fn main() -> std::io::Result<()> {
 
     sqlx::migrate!("../db/migrations")
         .run(&pool)
-        .await?;
+        .await;
 
     let user_service = UserService::new(pool.clone());
     let user_controller: Arc<dyn UserController> = Arc::new(UserControllerImpl::new(web::Data::new(user_service)));
