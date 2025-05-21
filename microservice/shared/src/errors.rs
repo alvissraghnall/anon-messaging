@@ -2,9 +2,8 @@ use actix_web::{HttpResponse, ResponseError};
 use sqlx::error::DatabaseError;
 use thiserror::Error;
 use jsonwebtoken::errors::Error as JwtError;
-use utoipa::{IntoParams, ToSchema};
 
-#[derive(Debug, Error, ToSchema)]
+#[derive(Debug, Error)]
 pub enum AppError {
     #[error("Database error: {0}")]
     DatabaseError(sqlx::Error),
