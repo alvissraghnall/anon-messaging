@@ -2,7 +2,7 @@ import { db, UserRepository } from '$lib/server/db';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { SERVICE_URL } from '$env/static/private';
-import { registerUserHandler } from '$lib/server/requests';
+//import { registerUserHandler } from '$lib/server/requests';
 import { z } from 'zod';
 
 
@@ -26,13 +26,21 @@ let userSchema = z.object({
 })
 
 let userRepo = new UserRepository(db);
-
+ 
 /*
 export const load: PageServerLoad = async ({ cookies }) => {
 	const user = await userRepo.getUserById(cookies.get('sessionid') ?? '');
 	return { user };
 };
 */
+
+export const load: PageServerLoad = async ({ fetch, params }) => {
+	const res = await fetch(`https://eerip.onrender.com/api/users`); 
+	const items = await res.json();
+	console.log(items);
+
+	return { users: items };
+};
 
 export const actions = {
 	default: async ({ request, cookies }) => {
@@ -43,7 +51,7 @@ export const actions = {
     const username = data.get('username');
     const password = data.get('password');
     
-		const formDataObject = Object.fromEntries(data);
+	const formDataObject = Object.fromEntries(data);
     const userData = userSchema.safeParse(formDataObject);
 
     if (!userData.success) {
@@ -62,9 +70,9 @@ export const actions = {
     		public_key: publicKey as string,
     		username: username as string
     	}
-    })
+    }) 
 
-		console.log(responseData);
+	console.log(responseData);
     console.log(error);
 
     if (error) {

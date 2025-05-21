@@ -30,7 +30,7 @@
   function publicKeyToUrlSafeBase64(publicKey: forge.pki.PublicKey) {
     const pem = forge.pki.publicKeyToPem(publicKey);
   
-    // Strip PEM headers/footers and newlines
+    // Strip PEM headers/footers and newlines 
     const base64 = pem
       .replace('-----BEGIN PUBLIC KEY-----', '')
       .replace('-----END PUBLIC KEY-----', '')

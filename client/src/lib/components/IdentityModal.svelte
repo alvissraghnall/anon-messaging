@@ -4,9 +4,8 @@
   
   let { show, isLoading, onConfirm, onCancel, username, password, handleSubmit } = $props();
 
-  function preventDefaultAndStopPropagation<T extends Event>(fn: ((this: HTMLElement, event: T) => void) | null) {
+  function stopPropagation<T extends Event>(fn: ((this: HTMLElement, event: T) => void) | null) {
 		return function (this: HTMLElement, event: T) {
-			event.preventDefault();
 			event.stopPropagation();
 			fn && fn.call(this, event);
 		};
@@ -41,7 +40,7 @@
   	class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" 
 	  transition:fade
 	  onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onCancel()}
-	  onclick={preventDefaultAndStopPropagation(closeModalHandler)}
+	  onclick={stopPropagation(closeModalHandler)}
   >
     <div 
         class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg max-w-md w-full mx-4" 
@@ -49,19 +48,18 @@
         role="button"
         transition:scale={{ duration: 250 }}
     	  onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && void(0)}
-        onclick={preventDefaultAndStopPropagation(null)}
+        onclick={stopPropagation(null)}
     >
       <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create New Identity</h2>
       <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">
         A secure key pair will be generated for you. You may enter an optional username but a secure password.
       </p>
-      <form method="POST">
+      <form method="POST" use:enhance={handleSubmit}>
         <input
           type="text"
           placeholder="Optional Username"
           class="w-full px-4 py-2 mb-4 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           bind:value={username}
-          aria-required="true"
           required
         />
         <input
@@ -69,14 +67,13 @@
           placeholder="Password"
           class="w-full px-4 py-2 mb-4 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           bind:value={password}
-          aria-required="true"
           required
         />
         <div class="flex justify-end space-x-2">
           <button
             class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-            type="button"
             onclick={() => onCancel?.()}
+            type="button"
             disabled={isLoading}
           >
             Cancel
