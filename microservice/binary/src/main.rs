@@ -70,7 +70,7 @@ async fn main() -> std::io::Result<()> {
             .route("/healthz", web::get().to(health_check))
 //            .route("/generate-keys", web::post().to(generate_keys))
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", 10000))?
     .run()
     .await
 }
