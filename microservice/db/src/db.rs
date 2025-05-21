@@ -29,13 +29,20 @@ impl SqliteDb {
 
 pub async fn create_db_pool() -> Result<SqlitePool, Error> {
     dotenv().ok();
-    let env_file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".env.production");
-    INIT.call_once(|| {
-        dotenv::from_path(env_file_path).expect("ENV PRODUCTION FILE MUST EXIST!");
-    });
+
+	let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+	let workspace_root = crate_dir.parent().expect("Failed to find workspace root").to_path_buf();
+
+	let env_file_path = workspace_root.join(".env.production");
+
+	INIT.call_once(|| {
+	    dotenv::from_path(env_file_path).expect("ENV PRODUCTION FILE MUST EXIST!");
+	});
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     SqlitePool::connect(&database_url).await
+
 }
 
 pub async fn insert_user(
