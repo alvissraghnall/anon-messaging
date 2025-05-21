@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS users;
+-- DROP TABLE IF EXISTS users;
 
 -- CREATE TABLE users (
     --id TEXT PRIMARY KEY NOT NULL,
