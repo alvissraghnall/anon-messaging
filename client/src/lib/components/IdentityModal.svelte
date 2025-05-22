@@ -2,7 +2,7 @@
 	import { fade, scale } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 
-	let { show, isLoading, onConfirm, onCancel, username, password, handleSubmit, form } = $props();
+	let { show, isLoading, onConfirm, onCancel, username = $bindable(), password = $bindable(), handleSubmit, form } = $props();
 
 	function stopPropagation<T extends Event>(fn: ((this: HTMLElement, event: T) => void) | null) {
 		return function (this: HTMLElement, event: T) {
@@ -11,7 +11,8 @@
 		};
 	}
 
-	console.log(form);
+//	$inspect(username, password);
+//	console.log(form);
 
 	function closeModalHandler(this: HTMLElement, event: Event) {
 		onCancel?.();
@@ -19,7 +20,6 @@
 
 	/*
   export const handleEnhancedSubmit: SubmitFunction = async ({ formElement, formData, action, cancel, submitter }) => {
-    // Client-side JS is available - generate keys here
     
     const kp = await generateRSAKeyPair();
     const priv = forge.pki.privateKeyToPem(kp.privateKey);

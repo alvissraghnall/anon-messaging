@@ -31,10 +31,12 @@
 		mounted = true;
 	});
 
+	$inspect(username, password);
+
 	function publicKeyToUrlSafeBase64(publicKey: forge.pki.PublicKey) {
 		const pem = forge.pki.publicKeyToPem(publicKey);
 
-		// Strip PEM headers/footers and newlines
+		// Strip PEM headers/footers and newlines	
 		const base64 = pem
 			.replace('-----BEGIN PUBLIC KEY-----', '')
 			.replace('-----END PUBLIC KEY-----', '')
@@ -100,14 +102,17 @@
 			const pubB64 = publicKeyToUrlSafeBase64(kp.publicKey);
 
 			newFormData = new FormData();
+			console.log('username', username, password);
 			newFormData.set('username', username);
 			newFormData.set('password', password);
-			newFormData.set('public_key', pubPem);
+			newFormData.set('public_key', pubB64);
 
 			// Store private key for later use
 
-			// Use the new FormData with added public key
-			formData = newFormData;
+			formData.set('username', username);
+			formData.set('password', password);
+			formData.set('public_key', pubB64);
+			// formData = newFormData;
 		} catch (error) {
 			formStatus.set(FormState.ERROR);
 			generalError.set('Failed to generate security keys. Please try again.');
@@ -116,8 +121,10 @@
 		}
 
 		return async ({ result, formData, update }) => {
-			formData = newFormData;
-			console.log(formData);
+			update({ reset: false });
+			// formData = newFormData;
+			console.log('form', ...formData);
+			console.log('result', result);
 
 			if (result.type === 'success') {
 				formStatus.set(FormState.SUCCESS);
@@ -214,8 +221,8 @@
 			isLoading={modalLoading}
 			onConfirm={handleConfirm}
 			onCancel={handleCancel}
-			{username}
-			{password}
+			bind:username={username}
+			bind:password={password}
 			handleSubmit={handleEnhancedSubmit}
 			{form}
 		/>

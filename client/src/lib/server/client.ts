@@ -3,5 +3,5 @@ import type { CreateClientConfig } from './requests/client.gen';
 
 export const createClientConfig: CreateClientConfig = (config) => ({
 	...config,
-	baseUrl: SERVICE_URL
+	baseUrl: SERVICE_URL,
 });

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: eerip
+    env: rust
+    plan: starter
+    buildCommand: |
+      cargo install sqlx-cli &&
+      cargo sqlx migrate run --source ./db/migrations &&
+      cargo build --release
+    startCommand: cargo run --release
+    healthCheckPath: /healthz
+    autoDeploy: false
+    disk:
+      name: eerip-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///data/anonymous_messaging.db

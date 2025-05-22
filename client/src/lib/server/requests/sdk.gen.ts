@@ -58,18 +58,22 @@ export const getUsersHandler = <ThrowOnError extends boolean = false>(
 export const registerUserHandler = <ThrowOnError extends boolean = false>(
 	options: Options<RegisterUserHandlerData, ThrowOnError>
 ) => {
-	return (options.client ?? _heyApiClient).post<
+	console.log(options);
+	
+	let data = (options.client ?? _heyApiClient).post<
 		RegisterUserHandlerResponse,
 		RegisterUserHandlerError,
 		ThrowOnError
 	>({
-		url: '',
+		url: '/api/users',
 		...options,
 		headers: {
 			'Content-Type': 'application/json',
 			...options?.headers
 		}
 	});
+	console.log(data);
+	return data;
 };
 
 export const createMessageHandler = <ThrowOnError extends boolean = false>(

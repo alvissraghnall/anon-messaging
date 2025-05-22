@@ -2,8 +2,9 @@ import { db, UserRepository } from '$lib/server/db';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { SERVICE_URL } from '$env/static/private';
-//import { registerUserHandler } from '$lib/server/requests';
+import { registerUserHandler } from '$lib/server/requests';
 import { z } from 'zod';
+import { createUser } from '$lib/server/forward/create-user';
 
 type ValidationError = {
 	code: string;
@@ -52,6 +53,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 };
 */
 
+/*
 export const load: PageServerLoad = async ({ fetch, params }) => {
 	const res = await fetch(`https://eerip.onrender.com/api/users`);
 	const items = await res.json();
@@ -59,6 +61,7 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
 
 	return { users: items };
 };
+*/
 
 export const actions = {
 	default: async ({ request, cookies }) => {
@@ -85,17 +88,26 @@ export const actions = {
 			return fail(400, { error: true, errors });
 		}
 
+		/*
 		let { data: responseData, error } = await registerUserHandler({
 			body: {
 				public_key: publicKey as string,
 				username: username as string
-			}
+			},
+			url: SERVICE_URL,
+			headers: {
+	            'Content-Type': 'application/json',
+	        }
 		});
+		*/
 
-		console.log(responseData);
-		console.log(error);
+		const result = await createUser({ public_key: publicKey as string, username: username as string });
 
-		if (error) {
+		console.log(result);
+		console.log(result.error);
+
+		if (result.error) {
+			let error = result.error;
 			if ((error as any).kind === 'Field') {
 				const fieldErrors = (error as { kind: 'Field'; Field: ValidationError[] }).Field;
 
