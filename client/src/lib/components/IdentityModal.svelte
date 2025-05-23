@@ -72,7 +72,6 @@
 					placeholder="Optional Username"
 					class="mb-4 w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
 					bind:value={username}
-					required
 				/>
 				<input
 					type="text"
@@ -80,6 +79,7 @@
 					class="mb-4 w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
 					bind:value={password}
 					required
+					aria-required="true"
 				/>
 				<div class="flex justify-end space-x-2">
 					<button

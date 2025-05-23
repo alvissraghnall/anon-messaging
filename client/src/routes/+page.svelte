@@ -12,8 +12,9 @@
 	import { base64ToUrlSafe } from '$lib/utils/base64-to-url-safe';
 	import { applyAction } from '$app/forms';
 
-	let { form }: PageProps = $props();
+	let { form, data }: PageProps = $props();
 	console.log(form);
+	console.log(data);
 
 	let isLoading = false;
 	let error = '';
@@ -138,7 +139,7 @@
 				if (data?.redirect) {
 					await goto(data.redirect);
 				} else {
-					await goto('/dashboard');
+					// await goto('/dashboard');
 				}
 			} else if (result.type === 'error') {
 				formStatus.set(FormState.ERROR);

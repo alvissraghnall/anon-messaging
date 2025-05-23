@@ -55,7 +55,7 @@ async fn test_register_user_without_username() {
     ).await;
     
     let request = RegisterRequest {
-        public_key: "VGhlIHN1biBzaGFsbCBzb29uIHNoaW5l".to_string(),
+        public_key: "TUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUF2MjhMRlJXWTFXMVEtTGxNZ2RiRTRjMzFLRFh4U2NSdEwyOFBwR2w4VEFrYngzTHFMQzNCd1prcU8wYmN3TTVCa2kxZjRqcVRrQkw5YXB2RkpvbHhYU2h1OFk2SDdYV0lxOXJBdFgxRk9tWUVPRlY5ZGE2UDk1eFB6a2hSZFFvNUlWbm5XUnBPU2QyRWs1Y3J3QjFDNmxUUVJSRWJlY3A2LTBGTGdydUYwUjZ5R25oaUpzTjMwb25jUERYNldsTWpmUHZmSUJYR3pPZ2JnM2tId2JXaEFYcDVMTXZKTjVtNjMtUlJYVWJ4eVJUYjdHay1WM2lIQUFQUVNtVzkzLXVkYnAwenJPejRIOFFEb3RfUHpkcXJ4M1dwY0luU0RKNGExMkc3ZkRkaE9ySEc5Um96cTE5V0NWWjFRVHF5WmZnSU9UWGtlTUl5X3BqZlN5RlVmZDQ2MndJREFRQUI".to_string(),
         username: None,
     };
     
@@ -274,7 +274,7 @@ async fn test_update_user_public_key() {
     let initial_user = service.get_user_by_id(user_id).await.unwrap();
     
     // Execute update request with new public key
-    let new_public_key = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv6kL".to_string();
+    let new_public_key = "TUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUF2MjhMRlJXWTFXMVEtTGxNZ2RiRTRjMzFLRFh4U2NSdEwyOFBwR2w4VEFrYngzTHFMQzNCd1prcU8wYmN3TTVCa2kxZjRqcVRrQkw5YXB2RkpvbHhYU2h1OFk2SDdYV0lxOXJBdFgxRk9tWUVPRlY5ZGE2UDk1eFB6a2hSZFFvNUlWbm5XUnBPU2QyRWs1Y3J3QjFDNmxUUVJSRWJlY3A2LTBGTGdydUYwUjZ5R25oaUpzTjMwb25jUERYNldsTWpmUHZmSUJYR3pPZ2JnM2tId2JXaEFYcDVMTXZKTjVtNjMtUlJYVWJ4eVJUYjdHay1WM2lIQUFQUVNtVzkzLXVkYnAwenJPejRIOFFEb3RfUHpkcXJ4M1dwY0luU0RKNGExMkc3ZkRkaE9ySEc5Um96cTE5V0NWWjFRVHF5WmZnSU9UWGtlTUl5X3BqZlN5RlVmZDQ2MndJREFRQUI".to_string();
     let update_request = UpdateUserRequest {
         new_username: None,
         new_public_key: Some(new_public_key.clone()),

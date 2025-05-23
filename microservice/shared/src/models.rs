@@ -10,7 +10,7 @@ use validator::{Validate, ValidationError};
 
 #[derive(Debug, Serialize, Deserialize, Validate, ToSchema, Clone, PartialEq)]
 pub struct RegisterRequest {
-    #[validate(length(min = 3, max = 50))]
+    #[validate(length(min = 3, max = 50, message = "username should have 3-50 characters if provided."))]
     pub username: Option<String>,
 
     #[validate(length(min = 50, message = "Invalid public key format"))]
@@ -26,7 +26,7 @@ pub struct RegisterResponse {
 
 #[derive(Debug, Serialize, Deserialize, Validate, ToSchema, PartialEq, Clone)]
 pub struct UpdateUserRequest {
-    #[validate(length(min = 3, max = 50))]
+    #[validate(length(min = 3, max = 50, message = "username should have 3-50 characters if provided."))]
     pub new_username: Option<String>,
 
     #[validate(length(min = 50, message = "Invalid public key format"))]
@@ -67,10 +67,10 @@ pub struct CreateMessageRequest {
     #[serde(with = "uuid::serde::simple")]
     pub recipient_id: Uuid,
 
-    #[validate(custom(function = "validate_base64_min_len_4"))]
+    #[validate(custom(function = "validate_base64_min_len_4", message = "Encrypted content should be valid URL-safe Base 64 with at least 4 characters."))]
     pub encrypted_content: String,
 
-    #[validate(custom(function = "validate_optional_base64_max_512"))]
+    #[validate(custom(function = "validate_optional_base64_max_512", message = "Signature should be valid URL-safe Base 64 with at most 512 characters if provided."))]
     pub signature: Option<String>,
 
     pub parent_id: Option<i64>,

@@ -9,8 +9,8 @@ export default {
 		'@tanstack/svelte-query',
 		'zod',
 		{
-			name: '@hey-api/client-fetch',
-			runtimeConfigPath: './src/lib/server/client.ts'
+			//name: '@hey-api/client-fetch',
+			//runtimeConfigPath: './src/lib/server/client.ts'
 		}
 	]
 };

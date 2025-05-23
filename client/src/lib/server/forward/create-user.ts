@@ -31,6 +31,7 @@ export async function createUser(payload: CreateUserPayload): Promise<
       },
       body: JSON.stringify(payload),
     });
+	console.log('res: ', response);
 
     if (response.ok) {
       const data = (await response.json()) as CreateUserSuccess;

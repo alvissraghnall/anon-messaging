@@ -14,7 +14,6 @@ CREATE TABLE users (
     id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 16),
     username TEXT NOT NULL UNIQUE CHECK (length(username) >= 3 AND length(username) <= 50),
     public_key TEXT NOT NULL CHECK (
-        length(public_key) % 4 = 0 AND
         public_key GLOB '[A-Za-z0-9_-]*' AND
         public_key NOT LIKE '%==%'
     ),

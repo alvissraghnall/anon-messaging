@@ -82,6 +82,9 @@ impl<R: UserRepository> UserControllerImpl<R> {
 #[async_trait::async_trait]
 impl<R: UserRepository + 'static> UserController for UserControllerImpl<R> {
     async fn register_user(self: &Self, request: Json<RegisterRequest>) -> RegisterUserResponse {
+        if let Err(validation_errors) = request.validate() {
+            return Err(AppError::ValidationError(validation_errors));
+        }
         let response = self.service.register_user(request.into_inner()).await?;
         Ok(HttpResponse::Created().json(response))
     }
@@ -101,6 +104,9 @@ impl<R: UserRepository + 'static> UserController for UserControllerImpl<R> {
         user_id: Path<Uuid>,
         request: Json<UpdateUserRequest>,
     ) -> UpdateUserResponse {
+        if let Err(validation_errors) = request.validate() {
+            return Err(AppError::ValidationError(validation_errors));
+        }
         self.service
             .update_user(*user_id, request.into_inner())
             .await?;
@@ -292,17 +298,22 @@ mod tests {
         serde_json::from_slice(&body).unwrap()
     }
 
-    pub async fn generate_key() -> (PublicKey, PublicKeyHash) {
-        let signing_key = SigningKey::random(&mut OsRng);
-        let verifying_key = VerifyingKey::from(&signing_key);
+	pub async fn generate_key() -> (PublicKey, PublicKeyHash) {
+	    let signing_key = SigningKey::random(&mut OsRng);
+	    let verifying_key = VerifyingKey::from(&signing_key);
 
-        let b64_key = CUSTOM_ENGINE.encode(verifying_key.to_encoded_point(true).as_bytes());
-        let public_key = PublicKey::new(b64_key).unwrap();
+	    let mut b64_key = CUSTOM_ENGINE.encode(verifying_key.to_encoded_point(true).as_bytes());
 
-        let public_key_hash = public_key.to_hash().unwrap();
+	    if b64_key.len() < 50 {
+	        let pad_len = 50 - b64_key.len();
+	        b64_key.push_str(&"A".repeat(pad_len));
+	    }
 
-        (public_key, public_key_hash)
-    }
+	    let public_key = PublicKey::new(b64_key).unwrap();
+	    let public_key_hash = public_key.to_hash().unwrap();
+
+	    (public_key, public_key_hash)
+	}
 
     #[actix_web::test]
     async fn test_register_user_success() {
@@ -347,7 +358,7 @@ mod tests {
         let test_uuid = Uuid::now_v7();
         let request = RegisterRequest {
             username: None,
-            public_key: "test_public_key".to_string(),
+            public_key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv28LFRWY1W1Q-LlMgdbE4c31KDXxScRtL28PpGl8TAkbx3LqLC3BwZkqO0bcwM5Bki1f4jqTkBL9apvFJolxXShu8Y6H7XWIq9rAtX1FOmYEOFV9da6P95xPzkhRdQo5IVnnWRpOSd2Ek5crwB1C6lTQRREbecp6-0FLgruF0R6yGnhiJsN30oncPDX6WlMjfPvfIBXGzOgbg3kHwbWhAXp5LMvJN5m63-RRXUbxyRTb7Gk-V3iHAAPQSmW93-udbp0zrOz4H8QDot_Pzdqrx3WpcInSDJ4a12G7fDdhOrHG9Rozq19WCVZ1QTqyZfgIOTXkeMIy_pjfSyFUfd462wIDAQAB".to_string(),
         };
         let req_json = Json(request.clone());
 
@@ -359,7 +370,7 @@ mod tests {
         mock_repo
             .expect_insert_user()
             .withf(move |pk, username| {
-                pk == "test_public_key"
+                pk == "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv28LFRWY1W1Q-LlMgdbE4c31KDXxScRtL28PpGl8TAkbx3LqLC3BwZkqO0bcwM5Bki1f4jqTkBL9apvFJolxXShu8Y6H7XWIq9rAtX1FOmYEOFV9da6P95xPzkhRdQo5IVnnWRpOSd2Ek5crwB1C6lTQRREbecp6-0FLgruF0R6yGnhiJsN30oncPDX6WlMjfPvfIBXGzOgbg3kHwbWhAXp5LMvJN5m63-RRXUbxyRTb7Gk-V3iHAAPQSmW93-udbp0zrOz4H8QDot_Pzdqrx3WpcInSDJ4a12G7fDdhOrHG9Rozq19WCVZ1QTqyZfgIOTXkeMIy_pjfSyFUfd462wIDAQAB"
             })
             .times(1)
             .returning(move |username, _| {
@@ -590,15 +601,16 @@ mod tests {
     #[actix_web::test]
     async fn test_register_user_conflict() {
         let mut mock = MockUserRepository::new();
+		let (public_key, public_key_hash) = generate_key().await;
 
         let request = RegisterRequest {
             username: Some("existing_user".to_string()),
-            public_key: "existing_key".to_string(),
+            public_key: public_key.to_string(),
         };
 
         mock.expect_insert_user()
             .with(
-                eq("existing_key".to_string()),
+                eq(public_key.to_string()),
                 eq("existing_user".to_string())
             )
             .times(1)

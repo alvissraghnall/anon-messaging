@@ -74,7 +74,6 @@ pub struct JwtConfig {
 
 impl Default for JwtConfig {
     fn default() -> Self {
-        let secret = "your_jwt_secret_key";
         let mut validation = Validation::new(Algorithm::RS256);
         validation.validate_exp = true;
         

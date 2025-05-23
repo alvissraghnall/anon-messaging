@@ -6,6 +6,12 @@ import { registerUserHandler } from '$lib/server/requests';
 import { z } from 'zod';
 import { createUser } from '$lib/server/forward/create-user';
 
+import { createClient } from '@hey-api/client-fetch';
+
+const myClient = createClient({
+  baseUrl: SERVICE_URL,
+});
+
 type ValidationError = {
 	code: string;
 	message?: string;
@@ -20,6 +26,13 @@ type ValidationErrorsKind =
 	| { kind: 'Struct'; Struct: Record<string, unknown> }
 	| { kind: 'List'; List: Record<number, unknown> };
 
+
+const emptyStringToUndefined = z.literal("").transform(() => undefined)
+
+export function asOptionalField<T extends z.ZodTypeAny>(schema: T) {
+  return schema.optional().or(emptyStringToUndefined)
+}
+
 const userSchema = z.object({
 	public_key: z
 		.string({
@@ -30,11 +43,13 @@ const userSchema = z.object({
 
 	username: z
 		.string({
-			required_error: 'Username is required',
 			invalid_type_error: 'Username must be a string'
 		})
 		.trim()
-		.min(1, { message: 'Username cannot be empty' }),
+		.min(3, { message: 'Username cannot be less than 3 chars' })
+		.max(50, { message: 'Username cannot have over 50 chars' })
+		.optional()
+		.or(emptyStringToUndefined),
 
 	password: z
 		.string({
@@ -46,12 +61,10 @@ const userSchema = z.object({
 
 let userRepo = new UserRepository(db);
 
-/*
 export const load: PageServerLoad = async ({ cookies }) => {
-	const user = await userRepo.getUserById(cookies.get('sessionid') ?? '');
-	return { user };
+	const { id, username } = await userRepo.getUserById(cookies.get('user_id') ?? '');
+	return { id, username };
 };
-*/
 
 /*
 export const load: PageServerLoad = async ({ fetch, params }) => {
@@ -87,27 +100,31 @@ export const actions = {
 
 			return fail(400, { error: true, errors });
 		}
-
-		/*
+		console.log(userData);
+		
 		let { data: responseData, error } = await registerUserHandler({
 			body: {
-				public_key: publicKey as string,
-				username: username as string
+				public_key: userData.data.public_key,
+				username: userData.data.username
 			},
-			url: SERVICE_URL,
+			url: '/api/users',
 			headers: {
 	            'Content-Type': 'application/json',
-	        }
+	        },
+			client: myClient,
 		});
-		*/
+		
+		let { user_id, username: resUsername } = await responseData;
 
+		console.log(user_id, error);
+/*		
 		const result = await createUser({ public_key: publicKey as string, username: username as string });
 
 		console.log(result);
 		console.log(result.error);
 
-		if (result.error) {
-			let error = result.error;
+		if (error) {
+			// let error = result.error;
 			if ((error as any).kind === 'Field') {
 				const fieldErrors = (error as { kind: 'Field'; Field: ValidationError[] }).Field;
 
@@ -127,9 +144,25 @@ export const actions = {
 
 			return fail(500, { message: 'Unexpected error structure' });
 		}
+*/
 
-		// const createdUser = await fetch(`${SERVICE_URL}/`)
+		if (error) {
+		    const fieldErrors = error as Record<string, Array<{ code: string; message: string; params?: Record<string, any> }>>;
 
-		// let user = userRepo.createUser('', '', '');
+		    const filteredErrors = Object.entries(fieldErrors).reduce((acc, [field, errors]) => {
+		        if (field !== 'public_key') {
+		            acc[field] = errors;
+		        }
+		        return acc;
+		    }, {} as typeof fieldErrors);
+
+		    return fail(400, { errors: filteredErrors });
+		}
+
+		let user = await userRepo.createUser(user_id, resUsername, userData.data.password);
+
+		cookies.set('user_id', user_id, { path: '/' });
+
+		return { success: true };
 	}
 } satisfies Actions;

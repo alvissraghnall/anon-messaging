@@ -23,8 +23,13 @@ static CUSTOM_ENGINE: engine::GeneralPurpose =
     engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD);
 
 async fn setup_test_db() -> SqlitePool {
-    let root_dir = PathBuf::from(env::current_dir().unwrap().parent().unwrap());
-    let env_file_path = root_dir.join(".env.test");
+	
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    let workspace_root = crate_dir.parent().expect("Failed to find workspace root").to_path_buf();
+
+    let env_file_path = workspace_root.join(".env.test");
+
     INIT.call_once(|| {
         dotenv::from_path(env_file_path).expect("ENV TEST FILE MUST EXIST!");
     });
@@ -1264,7 +1269,7 @@ async fn test_update_user_public_key() {
 
     let original_user = get_user_by_id(&pool, user_id).await.unwrap();
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(900)).await;
+    tokio::time::sleep(tokio::time::Duration::from_millis(1100)).await;
 
     let (new_public_key, new_public_key_hash) = generate_key().await;
 
