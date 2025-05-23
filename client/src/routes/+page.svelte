@@ -11,6 +11,9 @@
 	import { writable } from 'svelte/store';
 	import { base64ToUrlSafe } from '$lib/utils/base64-to-url-safe';
 	import { applyAction } from '$app/forms';
+	import IdentityCreatedSuccess from '$lib/components/IdentityCreatedSuccess.svelte';
+	import { encryptWithPassword } from '$lib/utils/key-encrypt';
+	import { db } from '$lib/utils/rsa-keystore';
 
 	let { form, data }: PageProps = $props();
 	console.log(form);
@@ -26,6 +29,15 @@
 	let username = $state('');
 	let password = $state('');
 
+	let showSuccessModal = $state(false);
+
+	let newIdentity = $state(
+		{
+			id: '',
+			username: ''
+		}
+	);
+	
 	const staggerDelay = 150;
 
 	onMount(() => {
@@ -37,7 +49,7 @@
 	function publicKeyToUrlSafeBase64(publicKey: forge.pki.PublicKey) {
 		const pem = forge.pki.publicKeyToPem(publicKey);
 
-		// Strip PEM headers/footers and newlines	
+		// Strip PEM headers/footers and newlines
 		const base64 = pem
 			.replace('-----BEGIN PUBLIC KEY-----', '')
 			.replace('-----END PUBLIC KEY-----', '')
@@ -89,26 +101,21 @@
 		cancel,
 		submitter
 	}) => {
+		let kp: forge.pki.KeyPair, privPem: forge.pki.PEM, pubPem: forge.pki.PEM;
+		modalLoading = true;
 		console.log('submitting');
-		let newFormData: FormData;
 		// Reset errors and set submitting state
 		formStatus.set(FormState.SUBMITTING);
 		formErrors.set({});
 		generalError.set('');
 
 		try {
-			const kp = await generateRSAKeyPair();
-			const priv = forge.pki.privateKeyToPem(kp.privateKey);
-			const pubPem = forge.pki.publicKeyToPem(kp.publicKey);
+			kp = await generateRSAKeyPair();
+			privPem = forge.pki.privateKeyToPem(kp.privateKey);
+			pubPem = forge.pki.publicKeyToPem(kp.publicKey);
 			const pubB64 = publicKeyToUrlSafeBase64(kp.publicKey);
 
-			newFormData = new FormData();
 			console.log('username', username, password);
-			newFormData.set('username', username);
-			newFormData.set('password', password);
-			newFormData.set('public_key', pubB64);
-
-			// Store private key for later use
 
 			formData.set('username', username);
 			formData.set('password', password);
@@ -131,16 +138,10 @@
 				formStatus.set(FormState.SUCCESS);
 
 				const { data }: any = result;
+				showSuccessModal = true;
+				newIdentity.id = data.id;
+				newIdentity.username = data.username;
 
-				if (data?.token) {
-					localStorage.setItem('authToken', data.token);
-				}
-
-				if (data?.redirect) {
-					await goto(data.redirect);
-				} else {
-					// await goto('/dashboard');
-				}
 			} else if (result.type === 'error') {
 				formStatus.set(FormState.ERROR);
 				generalError.set(result.error?.message || 'An error occurred during submission');
@@ -152,7 +153,21 @@
 					formErrors.set(data);
 				}
 			}
+
+			modalLoading = false;
+			showModal = false;
 			applyAction(result);
+			
+			// Store private key for later use
+			let encPrivKey = encryptWithPassword(privPem, password);
+			let encPubKey = encryptWithPassword(pubPem, password);
+
+			const key_id = await db.keyPair.add({
+				privateKey: encPrivKey,
+				publicKey: encPubKey,
+				username
+			});
+
 		};
 	};
 
@@ -222,11 +237,22 @@
 			isLoading={modalLoading}
 			onConfirm={handleConfirm}
 			onCancel={handleCancel}
-			bind:username={username}
-			bind:password={password}
+			bind:username
+			bind:password
 			handleSubmit={handleEnhancedSubmit}
 			{form}
 		/>
+
+		{#if showSuccessModal}
+		  <IdentityCreatedSuccess
+		    id={newIdentity.id}
+		    username={newIdentity.username}
+		    onClose={() => showModal = false}
+		    onStartMessaging={() => {
+		      showModal = false;
+		      goto(`/messages`);
+		    }} />
+		{/if}
 
 		{#if mounted}
 			<div class="mx-auto mb-24 max-w-4xl" transition:fly={{ y: 20, duration: 600 }}>
@@ -255,22 +281,10 @@
 
 							<!-- Settings button -->
 							<button
+								aria-label="settings"
 								class="ml-auto rounded-full p-2 text-gray-400 transition-colors duration-200 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									class="h-5 w-5"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-									/>
-								</svg>
+								<Icon name={IconName.SETTINGS} />
 							</button>
 						</div>
 
@@ -319,6 +333,7 @@
 							in:slide={{ duration: 400, delay: 1100, axis: 'y' }}
 						>
 							<button
+								aria-label="chat-input"
 								class="p-2 text-gray-500 transition-colors duration-200 hover:text-emerald-600 dark:text-gray-400 dark:hover:text-emerald-400"
 							>
 								<svg

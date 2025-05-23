@@ -5,5 +5,6 @@ export enum IconName {
 	QUESTIONMARKCIRCLE = 'questionmarkcircle',
 	SUNLIGHT = 'sunlight',
 	PSEUDOCROWN = 'pseudocrown',
-	USERSECRET = 'usersecret'
+	USERSECRET = 'usersecret',
+	SETTINGS = 'settings',
 }

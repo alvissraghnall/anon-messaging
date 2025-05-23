@@ -9,14 +9,16 @@ import { createUser } from '$lib/server/forward/create-user';
 import { createClient } from '@hey-api/client-fetch';
 
 const myClient = createClient({
-  baseUrl: SERVICE_URL,
+	baseUrl: SERVICE_URL
 });
 
 type ValidationError = {
 	code: string;
 	message?: string;
 	params: {
-		[key: string]: any;
+		max?: number;
+		min?: number;
+		value: any;
 		path?: string;
 	};
 };
@@ -26,11 +28,10 @@ type ValidationErrorsKind =
 	| { kind: 'Struct'; Struct: Record<string, unknown> }
 	| { kind: 'List'; List: Record<number, unknown> };
 
-
-const emptyStringToUndefined = z.literal("").transform(() => undefined)
+const emptyStringToUndefined = z.literal('').transform(() => undefined);
 
 export function asOptionalField<T extends z.ZodTypeAny>(schema: T) {
-  return schema.optional().or(emptyStringToUndefined)
+	return schema.optional().or(emptyStringToUndefined);
 }
 
 const userSchema = z.object({
@@ -62,8 +63,9 @@ const userSchema = z.object({
 let userRepo = new UserRepository(db);
 
 export const load: PageServerLoad = async ({ cookies }) => {
-	const { id, username } = await userRepo.getUserById(cookies.get('user_id') ?? '');
-	return { id, username };
+	const user = await userRepo.getUserById(cookies.get('user_id') ?? '');
+	if (!user) return null;
+	return { id: user.id, username: user.username };
 };
 
 /*
@@ -101,7 +103,7 @@ export const actions = {
 			return fail(400, { error: true, errors });
 		}
 		console.log(userData);
-		
+
 		let { data: responseData, error } = await registerUserHandler({
 			body: {
 				public_key: userData.data.public_key,
@@ -109,15 +111,15 @@ export const actions = {
 			},
 			url: '/api/users',
 			headers: {
-	            'Content-Type': 'application/json',
-	        },
-			client: myClient,
+				'Content-Type': 'application/json'
+			},
+			client: myClient
 		});
-		
+
 		let { user_id, username: resUsername } = await responseData;
 
 		console.log(user_id, error);
-/*		
+		/*		
 		const result = await createUser({ public_key: publicKey as string, username: username as string });
 
 		console.log(result);
@@ -147,22 +149,25 @@ export const actions = {
 */
 
 		if (error) {
-		    const fieldErrors = error as Record<string, Array<{ code: string; message: string; params?: Record<string, any> }>>;
+			const fieldErrors = error as Record<string, Array<ValidationError>>;
 
-		    const filteredErrors = Object.entries(fieldErrors).reduce((acc, [field, errors]) => {
-		        if (field !== 'public_key') {
-		            acc[field] = errors;
-		        }
-		        return acc;
-		    }, {} as typeof fieldErrors);
+			const filteredErrors = Object.entries(fieldErrors).reduce(
+				(acc, [field, errors]) => {
+					if (field !== 'public_key') {
+						acc[field] = errors;
+					}
+					return acc;
+				},
+				{} as typeof fieldErrors
+			);
 
-		    return fail(400, { errors: filteredErrors });
+			return fail(400, { errors: filteredErrors });
 		}
 
 		let user = await userRepo.createUser(user_id, resUsername, userData.data.password);
 
 		cookies.set('user_id', user_id, { path: '/' });
 
-		return { success: true };
+		return { success: true, id: user_id, username: resUsername };
 	}
 } satisfies Actions;

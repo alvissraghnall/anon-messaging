@@ -1,10 +1,10 @@
 <script lang="ts">
-	let name = '';
-	let email = '';
-	let message = '';
-	let sending = false;
-	let sent = false;
-	let error = '';
+	let name = $state('');
+	let email = $state('');
+	let message = $state('');
+	let sending = $state(false);
+	let sent = $state(false);
+	let error = $state('');
 
 	async function handleSubmit(ev: Event) {
 		ev.preventDefault();
@@ -17,13 +17,6 @@
 		error = '';
 
 		try {
-			// const response = await fetch('/api/contact', {
-			//   method: 'POST',
-			//   body: JSON.stringify({ name, email, message }),
-			//   headers: { 'Content-Type': 'application/json' }
-			// });
-
-			// if (!response.ok) throw new Error('Failed to send message');
 
 			await new Promise((resolve) => setTimeout(resolve, 10000));
 

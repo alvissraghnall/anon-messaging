@@ -1,13 +1,10 @@
 import { SERVICE_URL } from '$env/static/private';
-import type { CreateClientConfig } from './requests/client.gen';
+import { createClient, type Client } from '@hey-api/client-fetch';
 
-export const createClientConfig: CreateClientConfig = (config) => ({
-	...config,
+export const generalClient: Client = createClient({
 	baseUrl: SERVICE_URL,
 	headers: {
-		'content-type': 'application/json',
+		'content-type': 'application/json'
 	},
-	mode: 'no-cors',
+	mode: 'no-cors'
 });
-
- 

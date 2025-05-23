@@ -17,7 +17,8 @@
 		"lint": "prettier --check . && eslint .",
 		"test:unit": "vitest",
 		"test": "pnpm run test:unit -- --run && pnpm run test:e2e",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"test:ui": "vitest --ui"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.9",

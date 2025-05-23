@@ -2,7 +2,16 @@
 	import { fade, scale } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 
-	let { show, isLoading, onConfirm, onCancel, username = $bindable(), password = $bindable(), handleSubmit, form } = $props();
+	let {
+		show,
+		isLoading,
+		onConfirm,
+		onCancel,
+		username = $bindable(),
+		password = $bindable(),
+		handleSubmit,
+		form
+	} = $props();
 
 	function stopPropagation<T extends Event>(fn: ((this: HTMLElement, event: T) => void) | null) {
 		return function (this: HTMLElement, event: T) {
@@ -11,8 +20,8 @@
 		};
 	}
 
-//	$inspect(username, password);
-//	console.log(form);
+	//	$inspect(username, password);
+	//	console.log(form);
 
 	function closeModalHandler(this: HTMLElement, event: Event) {
 		onCancel?.();
@@ -38,10 +47,10 @@
 {#if show}
 	<div
 		tabindex="0"
-		role="button"
+		role="dialog"
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 		transition:fade
-		onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onCancel()}
+		onkeydown={(e) => (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') && onCancel()}
 		onclick={stopPropagation(closeModalHandler)}
 	>
 		<div
@@ -66,7 +75,7 @@
 				</ul>
 			{/if}
 
-			<form method="POST" use:enhance={handleSubmit}>
+			<form id="create-identity" method="POST" use:enhance={handleSubmit}>
 				<input
 					type="text"
 					placeholder="Optional Username"
@@ -98,6 +107,7 @@
 						{#if isLoading}
 							<span class="inline-flex items-center">
 								<span
+									data-testid='spinner'
 									class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
 								></span>
 								<span>Creating...</span>

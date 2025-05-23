@@ -3,46 +3,31 @@
 import { z } from 'zod';
 
 export const zCreateMessageRequest = z.object({
-    encrypted_content: z.string(),
-    parent_id: z.union([
-        z.coerce.bigint(),
-        z.null()
-    ]).optional(),
-    recipient_id: z.string().uuid(),
-    sender_id: z.string().uuid(),
-    signature: z.union([
-        z.string(),
-        z.null()
-    ]).optional()
+	encrypted_content: z.string(),
+	parent_id: z.union([z.coerce.bigint(), z.null()]).optional(),
+	recipient_id: z.string().uuid(),
+	sender_id: z.string().uuid(),
+	signature: z.union([z.string(), z.null()]).optional()
 });
 
 export const zCreateMessageResponse = z.object({
-    message_id: z.coerce.bigint()
+	message_id: z.coerce.bigint()
 });
 
 export const zFieldValidationErrorDoc = z.object({
-    code: z.string(),
-    message: z.union([
-        z.string(),
-        z.null()
-    ]).optional()
+	code: z.string(),
+	message: z.union([z.string(), z.null()]).optional()
 });
 
 export const zMessage = z.object({
-    created_at: z.string().datetime(),
-    encrypted_content: z.string(),
-    id: z.coerce.bigint(),
-    is_read: z.boolean(),
-    parent_id: z.union([
-        z.coerce.bigint(),
-        z.null()
-    ]).optional(),
-    recipient_id: z.string().uuid(),
-    sender_id: z.string().uuid(),
-    signature: z.union([
-        z.string(),
-        z.null()
-    ]).optional()
+	created_at: z.string().datetime(),
+	encrypted_content: z.string(),
+	id: z.coerce.bigint(),
+	is_read: z.boolean(),
+	parent_id: z.union([z.coerce.bigint(), z.null()]).optional(),
+	recipient_id: z.string().uuid(),
+	sender_id: z.string().uuid(),
+	signature: z.union([z.string(), z.null()]).optional()
 });
 
 export const zPublicKey = z.string();
@@ -50,68 +35,50 @@ export const zPublicKey = z.string();
 export const zPublicKeyHash = z.string();
 
 export const zRegisterRequest = z.object({
-    public_key: z.string(),
-    username: z.union([
-        z.string(),
-        z.null()
-    ]).optional()
+	public_key: z.string(),
+	username: z.union([z.string(), z.null()]).optional()
 });
 
 export const zRegisterResponse = z.object({
-    user_id: z.string().uuid(),
-    username: z.string()
+	user_id: z.string().uuid(),
+	username: z.string()
 });
 
 export const zRevokeTokenRequest = z.object({
-    jwt_token: z.string(),
-    reason: z.union([
-        z.string(),
-        z.null()
-    ]).optional()
+	jwt_token: z.string(),
+	reason: z.union([z.string(), z.null()]).optional()
 });
 
 export const zStoreTokenRequest = z.object({
-    device_info: z.union([
-        z.string(),
-        z.null()
-    ]).optional(),
-    jwt_token: z.string()
+	device_info: z.union([z.string(), z.null()]).optional(),
+	jwt_token: z.string()
 });
 
 export const zUpdateUserRequest = z.object({
-    new_public_key: z.union([
-        z.string(),
-        z.null()
-    ]).optional(),
-    new_username: z.union([
-        z.string(),
-        z.null()
-    ]).optional()
+	new_public_key: z.union([z.string(), z.null()]).optional(),
+	new_username: z.union([z.string(), z.null()]).optional()
 });
 
 export const zUser = z.object({
-    created_at: z.string().datetime(),
-    id: z.string().uuid(),
-    last_login: z.union([
-        z.string().datetime(),
-        z.null()
-    ]).optional(),
-    public_key: zPublicKey,
-    public_key_hash: zPublicKeyHash,
-    updated_at: z.string().datetime(),
-    username: z.string()
+	created_at: z.string().datetime(),
+	id: z.string().uuid(),
+	last_login: z.union([z.string().datetime(), z.null()]).optional(),
+	public_key: zPublicKey,
+	public_key_hash: zPublicKeyHash,
+	updated_at: z.string().datetime(),
+	username: z.string()
 });
 
 export const zValidateTokenRequest = z.object({
-    jwt_token: z.string()
+	jwt_token: z.string()
 });
 
 export const zValidateTokenResponse = z.object({
-    valid: z.boolean()
+	valid: z.boolean()
 });
 
 export const zValidationErrorResponseDoc = z.object({
-    errors: z.object({})
+	errors: z.object({})
 });
 
 export const zGetUsersHandlerResponse = z.array(zUser);

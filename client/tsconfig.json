@@ -8,6 +8,7 @@
 		"resolveJsonModule": true,
 		"skipLibCheck": true,
 		"sourceMap": true,
+		"types": ["vitest", "@types/node", "@testing-library/jest-dom"],
 		"strict": true,
 		"moduleResolution": "bundler",
 		"plugins": [

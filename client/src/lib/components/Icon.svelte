@@ -3,9 +3,9 @@
 
 	type PropTypes = {
 		name: string;
-		size: number;
-		color: string;
-		className: string;
+		size?: number;
+		color?: string;
+		className?: string;
 	};
 </script>
 
